@@ -1,21 +1,24 @@
 /**
- * AI Business Modules Service
- * Centralized service for all 9 Business Journey AI modules.
- * Every request automatically carries Authorization + X-Startup-ID via apiClient.
+ * AI Business Modules Service — Adapter Layer
+ * Bridges the FastAPI backend response shapes with frontend component contracts.
+ * All 9 Business Journey modules are covered here.
+ *
+ * Backend wraps everything in { success, message, data: <T> }
+ * This service unwraps `.data` and normalises field names where the two sides diverge.
  */
 
 import { apiClient } from "@/lib/api-client";
 import { eventBus, EVENTS } from "@/lib/events";
 
-// ─── Shared Types ──────────────────────────────────────────────────────────────
+// ─── Shared ────────────────────────────────────────────────────────────────────
 
 export interface AiMeta {
-  provider: string;        // "gemini" | "groq"
+  provider: string;
   model: string;
-  confidence: number;      // 0–100
+  confidence: number;
   generation_time_ms: number;
   report_version: number;
-  generated_at: string;    // ISO timestamp
+  generated_at: string;
 }
 
 export interface VersionedReport<T> {
@@ -28,7 +31,71 @@ export interface VersionedReport<T> {
   created_at: string;
 }
 
-// ─── Interview Types ───────────────────────────────────────────────────────────
+// ─── Backend DTO shapes returned by the API ──────────────────────────────────
+
+/** Shape returned by POST /api/v1/ai/interview/start and POST /api/v1/ai/interview/answer */
+export interface BackendInterviewStep {
+  interview_id: string;
+  current_section: string;
+  next_question_id: string;
+  next_question: string;
+  question_type: string;
+  completed: boolean;
+  qa_history: Array<{ question_id: string; question: string; answer?: string; category?: string }>;
+  summary_so_far?: string;
+}
+
+/** Shape returned by GET /api/v1/ai/interview/{startupId} */
+export interface BackendInterviewDetails {
+  id: string;
+  startup_id: string;
+  user_id: string;
+  title: string;
+  status: string; // "not_started" | "in_progress" | "completed"
+  qa_history: Array<{ question_id: string; question: string; answer?: string; category?: string }>;
+  summary?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Shape returned by report generation endpoints (POST /api/v1/ai/*) */
+export interface BackendReport {
+  id: string;
+  startup_id: string;
+  user_id: string;
+  report_type: string;
+  title: string;
+  version: number;
+  status: string;
+  ai_provider: string;
+  confidence: number;
+  content: Record<string, any>;
+  conversation_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Convert a BackendReport (content) into the VersionedReport<T> shape (data + ai_meta). */
+function normalizeReport<T>(raw: BackendReport): VersionedReport<T> {
+  return {
+    id: raw.id,
+    startup_id: raw.startup_id,
+    report_type: raw.report_type,
+    version: raw.version,
+    data: (raw.content ?? {}) as T,
+    ai_meta: {
+      provider: raw.ai_provider ?? "gemini",
+      model: raw.ai_provider ?? "gemini-pro",
+      confidence: raw.confidence ?? 0.9,
+      generation_time_ms: 0,
+      report_version: raw.version,
+      generated_at: raw.created_at,
+    },
+    created_at: raw.created_at,
+  };
+}
+
+// ─── Frontend-facing interview types (what components consume) ────────────────
 
 export interface InterviewQuestion {
   question_id: string;
@@ -80,7 +147,7 @@ export interface InterviewStatusResponse {
   key_insights?: string[];
 }
 
-// ─── Idea Validation Types ─────────────────────────────────────────────────────
+// ─── Other module types ───────────────────────────────────────────────────────
 
 export interface ValidationScore {
   label: string;
@@ -100,8 +167,6 @@ export interface IdeaValidationData {
   next_steps: string[];
 }
 
-// ─── Business Strategy Types ───────────────────────────────────────────────────
-
 export interface StrategySection {
   title: string;
   body: string;
@@ -117,8 +182,6 @@ export interface BusinessStrategyData {
   sections: StrategySection[];
   kpis: string[];
 }
-
-// ─── Competitor Analysis Types ─────────────────────────────────────────────────
 
 export interface Competitor {
   name: string;
@@ -144,8 +207,6 @@ export interface CompetitorAnalysisData {
   positioning_summary: string;
 }
 
-// ─── Business Model Canvas Types ───────────────────────────────────────────────
-
 export interface CanvasBlock {
   key: string;
   items: string[];
@@ -156,26 +217,11 @@ export interface BusinessModelCanvasData {
   summary: string;
 }
 
-// ─── Financial Planning Types ──────────────────────────────────────────────────
-
 export interface FinancialStream {
   name: string;
-  mrr: string;
   share: number;
+  mrr: string;
   note: string;
-}
-
-export interface ForecastPoint {
-  month: string;
-  revenue: number;
-  costs: number;
-  profit: number;
-}
-
-export interface CashflowPoint {
-  month: string;
-  inflow: number;
-  outflow: number;
 }
 
 export interface FinancialPlanningData {
@@ -184,17 +230,13 @@ export interface FinancialPlanningData {
   funding_need: string;
   runway: string;
   streams: FinancialStream[];
-  revenue_forecast: ForecastPoint[];
-  cashflow: CashflowPoint[];
-  pricing_tiers: Array<{ tier: string; price: string; best_for: string; accounts: string }>;
-  financial_insight: string;
+  cashflow_projection: Array<{ month: string; inflow: number; outflow: number }>;
+  revenue_forecast: Array<{ quarter: string; revenue: number; costs: number; profit: number }>;
 }
 
-// ─── Risk Analysis Types ───────────────────────────────────────────────────────
-
 export interface Risk {
-  title: string;
   category: string;
+  title: string;
   severity: "High" | "Medium" | "Low";
   probability: number;
   impact: string;
@@ -208,8 +250,6 @@ export interface RiskAnalysisData {
   top_concern: string;
   mitigation_priority: string[];
 }
-
-// ─── Investor Readiness Types ──────────────────────────────────────────────────
 
 export interface InvestorChecklistItem {
   label: string;
@@ -242,8 +282,6 @@ export interface InvestorReadinessData {
   funding_options: FundingOption[];
 }
 
-// ─── Execution Roadmap Types ───────────────────────────────────────────────────
-
 export interface RoadmapMilestone {
   title: string;
   when: string;
@@ -271,8 +309,6 @@ export interface ExecutionRoadmapData {
   weekly_goals: string[];
 }
 
-// ─── Report History Types ──────────────────────────────────────────────────────
-
 export type ModuleStatus = "Not Started" | "In Progress" | "Completed" | "Needs Review";
 
 export interface ReportHistoryItem {
@@ -295,119 +331,259 @@ export interface ModuleStatuses {
   execution_roadmap: ModuleStatus;
 }
 
-// ─── Service ───────────────────────────────────────────────────────────────────
+// ─── Helper: adapt BackendInterviewStep to InterviewQuestion ─────────────────
+
+function adaptStep(step: BackendInterviewStep, startupId: string, qaCount: number): InterviewStartResponse {
+  const q: InterviewQuestion = {
+    question_id: step.next_question_id || `q_${qaCount + 1}`,
+    question: step.next_question || "Please describe your business concept.",
+    category: step.current_section || "General",
+    question_number: qaCount + 1,
+    total_questions: 10,
+    suggestions: [],
+    estimated_time_minutes: 2,
+  };
+  return {
+    session_id: step.interview_id,
+    startup_id: startupId,
+    first_question: q,
+    status: step.completed ? "completed" : "in_progress",
+  };
+}
+
+function adaptStepToAnswer(step: BackendInterviewStep, answered: string, startupId: string): InterviewAnswerResponse {
+  const nextQ: InterviewQuestion | null = step.completed
+    ? null
+    : {
+        question_id: step.next_question_id || "q_next",
+        question: step.next_question || "Continue describing your business.",
+        category: step.current_section || "General",
+        question_number: (step.qa_history?.length ?? 0) + 1,
+        total_questions: 10,
+        suggestions: [],
+        estimated_time_minutes: 2,
+      };
+
+  const answered_count = step.qa_history?.length ?? 0;
+  const progress = step.completed ? 100 : Math.min(95, Math.round((answered_count / 10) * 100));
+
+  return {
+    session_id: step.interview_id,
+    answered_question: answered,
+    category: step.current_section || "General",
+    next_question: nextQ,
+    is_complete: step.completed,
+    progress_percentage: progress,
+    insights_so_far: step.summary_so_far ? [step.summary_so_far] : [],
+  };
+}
+
+// ─── Service ──────────────────────────────────────────────────────────────────
 
 export const aiModulesService = {
-  // --- Interview ---
+  // --- MODULE 1: AI BUSINESS INTERVIEW ---
 
-  startInterview(): Promise<InterviewStartResponse> {
-    return apiClient.post("/api/v1/ai/interview/start");
+  async startInterview(): Promise<InterviewStartResponse> {
+    const res = await apiClient.post<{ success: boolean; data: BackendInterviewStep }>(
+      "/api/v1/ai/interview/start"
+    );
+    const step = res.data;
+    const startupId = step.interview_id; // best proxy — actual startup_id not returned by this endpoint
+    return adaptStep(step, startupId, step.qa_history?.length ?? 0);
   },
 
-  submitAnswer(payload: {
+  async submitAnswer(payload: {
     session_id: string;
     question_id: string;
+    question?: string;
     answer: string;
+    category?: string;
   }): Promise<InterviewAnswerResponse> {
-    return apiClient.post("/api/v1/ai/interview/answer", payload);
+    const res = await apiClient.post<{ success: boolean; data: BackendInterviewStep }>(
+      "/api/v1/ai/interview/answer",
+      {
+        question_id: payload.question_id,
+        question: payload.question || payload.question_id, // backend requires non-empty question text
+        answer: payload.answer,
+        category: payload.category || "General",
+      }
+    );
+    const step = res.data;
+    return adaptStepToAnswer(step, payload.answer, step.interview_id);
   },
 
   async completeInterview(session_id: string): Promise<InterviewCompleteResponse> {
-    const res = await apiClient.post<InterviewCompleteResponse>("/api/v1/ai/interview/complete", { session_id });
-    eventBus.emit(EVENTS.INTERVIEW_UPDATED, res);
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "interview", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>(
+      "/api/v1/ai/interview/complete"
+    );
+    const report = res.data;
+    const content = report.content ?? {};
+    const result: InterviewCompleteResponse = {
+      session_id,
+      startup_id: report.startup_id,
+      summary: content.business_summary || content.summary || "Interview complete.",
+      key_insights: content.key_insights ?? [],
+      modules_ready: ["idea_validation", "business_strategy", "competitor_analysis", "business_model_canvas", "financial_planning", "risk_analysis", "investor_readiness", "execution_roadmap"],
+      report_version: report.version,
+      generated_at: report.created_at,
+    };
+    eventBus.emit(EVENTS.INTERVIEW_UPDATED, result);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "interview", res: report });
+    return result;
   },
 
-  getInterviewStatus(startupId: string): Promise<InterviewStatusResponse> {
-    return apiClient.get(`/api/v1/ai/interview/${startupId}`);
+  async getInterviewStatus(startupId: string): Promise<InterviewStatusResponse> {
+    try {
+      const res = await apiClient.get<{ success: boolean; data: BackendInterviewDetails }>(
+        `/api/v1/ai/interview/${startupId}`
+      );
+      const detail = res.data;
+      const qa = (detail.qa_history ?? []).map((q) => ({
+        question: q.question,
+        answer: q.answer ?? "",
+        category: q.category ?? "General",
+      }));
+      const answered = qa.length;
+      const progress = detail.status === "completed" ? 100 : Math.min(95, Math.round((answered / 10) * 100));
+      return {
+        session_id: detail.id,
+        startup_id: detail.startup_id,
+        status: detail.status as "not_started" | "in_progress" | "completed",
+        current_question_number: answered + 1,
+        total_questions: 10,
+        progress_percentage: progress,
+        qa_history: qa,
+        summary: detail.summary,
+        key_insights: [],
+      };
+    } catch {
+      return {
+        session_id: null,
+        startup_id: startupId,
+        status: "not_started",
+        current_question_number: 1,
+        total_questions: 10,
+        progress_percentage: 0,
+        qa_history: [],
+      };
+    }
   },
 
-  // --- Idea Validation ---
+  // --- MODULE 2: IDEA VALIDATION ---
 
   async generateIdeaValidation(): Promise<VersionedReport<IdeaValidationData>> {
-    const res = await apiClient.post<VersionedReport<IdeaValidationData>>("/api/v1/ai/idea-validation");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "idea_validation", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/idea-validation");
+    const report = normalizeReport<IdeaValidationData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "idea_validation", res: res.data });
+    return report;
   },
 
-  // --- Business Strategy ---
+  // --- MODULE 3: BUSINESS STRATEGY ---
 
   async generateBusinessStrategy(): Promise<VersionedReport<BusinessStrategyData>> {
-    const res = await apiClient.post<VersionedReport<BusinessStrategyData>>("/api/v1/ai/business-strategy");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "business_strategy", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/business-strategy");
+    const report = normalizeReport<BusinessStrategyData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "business_strategy", res: res.data });
+    return report;
   },
 
-  // --- Competitor Analysis ---
+  // --- MODULE 4: COMPETITOR ANALYSIS ---
 
   async generateCompetitorAnalysis(): Promise<VersionedReport<CompetitorAnalysisData>> {
-    const res = await apiClient.post<VersionedReport<CompetitorAnalysisData>>("/api/v1/ai/competitor-analysis");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "competitor_analysis", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/competitor-analysis");
+    const report = normalizeReport<CompetitorAnalysisData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "competitor_analysis", res: res.data });
+    return report;
   },
 
-  // --- Business Model Canvas ---
+  // --- MODULE 5: BUSINESS MODEL CANVAS ---
 
   async generateBusinessModelCanvas(): Promise<VersionedReport<BusinessModelCanvasData>> {
-    const res = await apiClient.post<VersionedReport<BusinessModelCanvasData>>("/api/v1/ai/business-model-canvas");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "business_model_canvas", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/business-model-canvas");
+    const report = normalizeReport<BusinessModelCanvasData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "business_model_canvas", res: res.data });
+    return report;
   },
 
-  // --- Financial Planning ---
+  // --- MODULE 6: FINANCIAL PLANNING ---
 
   async generateFinancialPlanning(): Promise<VersionedReport<FinancialPlanningData>> {
-    const res = await apiClient.post<VersionedReport<FinancialPlanningData>>("/api/v1/ai/financial-planning");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "financial_planning", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/financial-planning");
+    const report = normalizeReport<FinancialPlanningData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "financial_planning", res: res.data });
+    return report;
   },
 
-  // --- Risk Analysis ---
+  // --- MODULE 7: RISK ANALYSIS ---
 
   async generateRiskAnalysis(): Promise<VersionedReport<RiskAnalysisData>> {
-    const res = await apiClient.post<VersionedReport<RiskAnalysisData>>("/api/v1/ai/risk-analysis");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "risk_analysis", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/risk-analysis");
+    const report = normalizeReport<RiskAnalysisData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "risk_analysis", res: res.data });
+    return report;
   },
 
-  // --- Investor Readiness ---
+  // --- MODULE 8: INVESTOR READINESS ---
 
   async generateInvestorReadiness(): Promise<VersionedReport<InvestorReadinessData>> {
-    const res = await apiClient.post<VersionedReport<InvestorReadinessData>>("/api/v1/ai/investor-readiness");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "investor_readiness", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/investor-readiness");
+    const report = normalizeReport<InvestorReadinessData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "investor_readiness", res: res.data });
+    return report;
   },
 
-  // --- Execution Roadmap ---
+  // --- MODULE 9: EXECUTION ROADMAP ---
 
   async generateExecutionRoadmap(): Promise<VersionedReport<ExecutionRoadmapData>> {
-    const res = await apiClient.post<VersionedReport<ExecutionRoadmapData>>("/api/v1/ai/execution-roadmap");
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "execution_roadmap", res });
-    return res;
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/ai/execution-roadmap");
+    const report = normalizeReport<ExecutionRoadmapData>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: "execution_roadmap", res: res.data });
+    return report;
   },
 
   // --- Report History ---
 
-  getReportHistory(reportType: string): Promise<ReportHistoryItem[]> {
-    return apiClient.get(`/api/v1/reports/history?report_type=${reportType}`);
+  async getReportHistory(reportType: string): Promise<ReportHistoryItem[]> {
+    try {
+      const res = await apiClient.get<{ success: boolean; data: BackendReport[] }>(
+        `/api/v1/reports/history?report_type=${reportType}`
+      );
+      return (res.data ?? []).map((r) => ({
+        id: r.id,
+        report_type: r.report_type,
+        version: r.version,
+        created_at: r.created_at,
+      }));
+    } catch {
+      return [];
+    }
   },
 
-  getLatestReport<T>(reportType: string): Promise<VersionedReport<T> | null> {
-    return apiClient.get(`/api/v1/reports/latest?report_type=${reportType}`).catch(() => null);
+  async getLatestReport<T = Record<string, any>>(reportType: string): Promise<VersionedReport<T> | null> {
+    try {
+      const res = await apiClient.get<{ success: boolean; data: BackendReport | null }>(
+        `/api/v1/reports/latest?report_type=${reportType}`
+      );
+      if (!res.data) return null;
+      return normalizeReport<T>(res.data);
+    } catch {
+      return null;
+    }
   },
 
-  async regenerateReport(reportType: string): Promise<VersionedReport<unknown>> {
-    const res = await apiClient.post<VersionedReport<unknown>>("/api/v1/reports/regenerate", { report_type: reportType });
-    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: reportType, res });
-    return res;
+  async regenerateReport<T = Record<string, any>>(reportType: string): Promise<VersionedReport<T>> {
+    const res = await apiClient.post<{ success: boolean; data: BackendReport }>("/api/v1/reports/regenerate", {
+      report_type: reportType,
+    });
+    const report = normalizeReport<T>(res.data);
+    eventBus.emit(EVENTS.AI_REPORT_GENERATED, { report_type: reportType, res: res.data });
+    return report;
   },
 
   // --- Module Statuses ---
 
   async getModuleStatuses(startupId: string): Promise<ModuleStatuses> {
     const moduleTypes = [
-      "interview",
       "idea_validation",
       "business_strategy",
       "competitor_analysis",
@@ -418,20 +594,16 @@ export const aiModulesService = {
       "execution_roadmap",
     ];
 
-    const results = await Promise.allSettled(
-      moduleTypes.map((t) =>
-        t === "interview"
-          ? aiModulesService.getInterviewStatus(startupId)
-          : aiModulesService.getReportHistory(t)
-      )
-    );
+    const [interviewStatus, ...reportResults] = await Promise.allSettled([
+      aiModulesService.getInterviewStatus(startupId),
+      ...moduleTypes.map((t) => aiModulesService.getReportHistory(t)),
+    ]);
 
     const statuses: Record<string, ModuleStatus> = {};
 
     // Interview status
-    const interviewResult = results[0];
-    if (interviewResult?.status === "fulfilled") {
-      const iv = interviewResult.value as InterviewStatusResponse;
+    if (interviewStatus?.status === "fulfilled") {
+      const iv = interviewStatus.value as InterviewStatusResponse;
       statuses["interview"] =
         iv.status === "completed"
           ? "Completed"
@@ -443,9 +615,9 @@ export const aiModulesService = {
     }
 
     // Report-based statuses
-    for (let i = 1; i < moduleTypes.length; i++) {
+    for (let i = 0; i < moduleTypes.length; i++) {
       const key = moduleTypes[i]!;
-      const result = results[i];
+      const result = reportResults[i];
       if (result?.status === "fulfilled") {
         const history = result.value as ReportHistoryItem[];
         statuses[key] = history.length > 0 ? "Completed" : "Not Started";
@@ -457,3 +629,13 @@ export const aiModulesService = {
     return statuses as ModuleStatuses;
   },
 };
+
+/** analysisStages — UI copy for the interview loading animation */
+export const analysisStages = [
+  "Understanding your startup...",
+  "Analyzing competitors...",
+  "Validating market demand...",
+  "Generating business strategy...",
+  "Building execution roadmap...",
+  "Finding investment opportunities...",
+];

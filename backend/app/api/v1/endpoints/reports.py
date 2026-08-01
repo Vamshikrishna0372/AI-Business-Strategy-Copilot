@@ -84,6 +84,25 @@ async def get_report_version_history(
 
 
 @router.get(
+    "/latest",
+    response_model=ResponseModel[Optional[ReportResponse]],
+    status_code=status.HTTP_200_OK,
+    summary="Get Latest Version of a Specific Report Type",
+)
+async def get_latest_report(
+    report_type: str = Query(..., description="Report type key e.g. 'business_strategy'"),
+    current_user: User = Depends(get_current_user),
+    current_startup: Startup = Depends(get_current_active_startup),
+):
+    """Returns the latest generated version of a specific report type for the active startup."""
+    history = await ai_service.get_report_history(str(current_startup.id), report_type)
+    if not history:
+        return ResponseModel(success=True, message=f"No report found for '{report_type}'", data=None)
+    latest = history[0]  # Already sorted by version desc
+    return ResponseModel(success=True, message=f"Latest report retrieved for '{report_type}'", data=_map_report(latest))
+
+
+@router.get(
     "/{reportId}",
     response_model=ResponseModel[ReportResponse],
     status_code=status.HTTP_200_OK,

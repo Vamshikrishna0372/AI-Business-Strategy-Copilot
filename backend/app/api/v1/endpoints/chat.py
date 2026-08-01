@@ -89,14 +89,20 @@ async def list_conversations(
         search=search,
     )
     data_list = [_map_conv_to_response(c) for c in conversations]
+    total_pages = max(1, (total + limit - 1) // limit) if limit > 0 else 1
+    page = (skip // limit) + 1 if limit > 0 else 1
     return PaginatedResponseModel(
         success=True,
         message="Conversations retrieved successfully",
         data=data_list,
-        total=total,
-        page=(skip // limit) + 1 if limit > 0 else 1,
-        page_size=limit,
-        has_more=(skip + limit) < total,
+        meta={
+            "total": total,
+            "page": page,
+            "page_size": limit,
+            "total_pages": total_pages,
+            "has_next": (skip + limit) < total,
+            "has_prev": skip > 0,
+        },
     )
 
 

@@ -174,7 +174,9 @@ function Interview() {
       const res = await aiModulesService.submitAnswer({
         session_id: sessionId,
         question_id: currentQuestion.question_id,
+        question: currentQuestion.question,
         answer: value,
+        category: currentQuestion.category,
       });
 
       setProgress(res.progress_percentage);

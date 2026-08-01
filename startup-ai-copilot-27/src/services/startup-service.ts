@@ -67,17 +67,17 @@ export const startupService = {
   },
 
   async archiveStartup(id: string): Promise<BackendStartup> {
-    const res = await apiClient.post<{ success: boolean; data: BackendStartup }>(`/api/v1/startups/${id}/archive`);
+    const res = await apiClient.patch<{ success: boolean; data: BackendStartup }>(`/api/v1/startups/${id}/archive`);
     return res.data;
   },
 
   async restoreStartup(id: string): Promise<BackendStartup> {
-    const res = await apiClient.post<{ success: boolean; data: BackendStartup }>(`/api/v1/startups/${id}/restore`);
+    const res = await apiClient.patch<{ success: boolean; data: BackendStartup }>(`/api/v1/startups/${id}/restore`);
     return res.data;
   },
 
   async activateStartup(id: string): Promise<BackendStartup> {
-    const res = await apiClient.post<{ success: boolean; data: BackendStartup }>(`/api/v1/startups/${id}/activate`);
+    const res = await apiClient.patch<{ success: boolean; data: BackendStartup }>(`/api/v1/startups/${id}/activate`);
     return res.data;
   },
 

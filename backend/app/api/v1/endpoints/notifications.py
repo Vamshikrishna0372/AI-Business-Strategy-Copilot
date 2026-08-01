@@ -1,29 +1,29 @@
-"""Notifications API Endpoints with complete MongoDB persistence."""
+"""Notifications API Endpoints with complete MongoDB persistence using Motor async collection."""
 
 from typing import List, Optional
+from bson import ObjectId
 from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel
 
 from app.common.responses import PaginatedResponseModel, ResponseModel
 from app.core.exceptions import NotFoundException
+from app.database.collections import CollectionName, get_collection
 from app.dependencies.auth import get_current_user
-from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.notification import NotificationResponse
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
-def _map_notification(n: Notification) -> NotificationResponse:
+def _map_notification(doc: dict) -> NotificationResponse:
     return NotificationResponse(
-        id=str(n.id),
-        user_id=str(n.user_id),
-        title=n.title,
-        message=n.message,
-        type=n.type,
-        is_read=n.is_read,
-        link=n.link,
-        created_at=n.created_at,
+        id=str(doc.get("_id", "")),
+        user_id=str(doc.get("user_id", "")),
+        title=doc.get("title", ""),
+        message=doc.get("message", ""),
+        type=doc.get("type", "SYSTEM"),
+        is_read=doc.get("is_read", False),
+        link=doc.get("link"),
+        created_at=doc.get("created_at"),
     )
 
 
@@ -40,12 +40,14 @@ async def list_notifications(
     current_user: User = Depends(get_current_user),
 ):
     """Lists notifications for the current authenticated user."""
-    query = {"user_id": current_user.id}
+    col = get_collection(CollectionName.NOTIFICATIONS)
+    query: dict = {"user_id": current_user.id}
     if unread_only:
         query["is_read"] = False
 
-    total = await Notification.find(query).count()
-    items = await Notification.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
+    total = await col.count_documents(query)
+    cursor = col.find(query).sort("_id", -1).skip(skip).limit(limit)
+    items = await cursor.to_list(length=limit)
 
     return PaginatedResponseModel(
         success=True,
@@ -73,13 +75,17 @@ async def mark_read(
     current_user: User = Depends(get_current_user),
 ):
     """Marks a single notification as read."""
-    notif = await Notification.get(id)
-    if not notif or str(notif.user_id) != str(current_user.id):
+    if not ObjectId.is_valid(id):
+        raise NotFoundException("Invalid notification ID format")
+
+    col = get_collection(CollectionName.NOTIFICATIONS)
+    doc = await col.find_one({"_id": ObjectId(id), "user_id": current_user.id})
+    if not doc:
         raise NotFoundException("Notification not found")
 
-    notif.is_read = True
-    await notif.save()
-    return ResponseModel(success=True, message="Notification marked as read", data=_map_notification(notif))
+    await col.update_one({"_id": ObjectId(id)}, {"$set": {"is_read": True}})
+    doc["is_read"] = True
+    return ResponseModel(success=True, message="Notification marked as read", data=_map_notification(doc))
 
 
 @router.post(
@@ -92,7 +98,8 @@ async def mark_all_read(
     current_user: User = Depends(get_current_user),
 ):
     """Marks all unread notifications for the user as read."""
-    await Notification.find({"user_id": current_user.id, "is_read": False}).update({"$set": {"is_read": True}})
+    col = get_collection(CollectionName.NOTIFICATIONS)
+    await col.update_many({"user_id": current_user.id, "is_read": False}, {"$set": {"is_read": True}})
     return ResponseModel(success=True, message="All notifications marked as read", data=True)
 
 
@@ -107,7 +114,9 @@ async def delete_notification(
     current_user: User = Depends(get_current_user),
 ):
     """Deletes a notification."""
-    notif = await Notification.get(id)
-    if notif and str(notif.user_id) == str(current_user.id):
-        await notif.delete()
+    if not ObjectId.is_valid(id):
+        return ResponseModel(success=True, message="Notification deleted", data=True)
+
+    col = get_collection(CollectionName.NOTIFICATIONS)
+    await col.delete_one({"_id": ObjectId(id), "user_id": current_user.id})
     return ResponseModel(success=True, message="Notification deleted", data=True)
