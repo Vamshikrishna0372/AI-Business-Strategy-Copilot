@@ -98,6 +98,21 @@ class Settings(BaseSettings):
                 return [i.strip() for i in v.split(",") if i.strip()]
         return v
 
+    def validate_production_env(self) -> None:
+        """Explicitly validates that required production environment variables are present at startup."""
+        if self.ENVIRONMENT == Environment.PRODUCTION:
+            missing = []
+            if not self.MONGODB_URI or "localhost" in self.MONGODB_URI:
+                missing.append("MONGODB_URI (Production MongoDB Atlas Connection String)")
+            if not self.JWT_SECRET or "super-secret" in self.JWT_SECRET:
+                missing.append("JWT_SECRET (Secret Key min 32 chars)")
+            if not (self.GEMINI_API_KEY or self.GEMINI_API_KEY_1 or self.GROQ_API_KEY):
+                missing.append("AI Provider Keys (GEMINI_API_KEY / GROQ_API_KEY)")
+            if missing:
+                raise ValueError(
+                    f"CRITICAL PRODUCTION CONFIGURATION ERROR: Missing required production environment variables: {', '.join(missing)}"
+                )
+
 
 @lru_cache()
 def get_settings() -> Settings:

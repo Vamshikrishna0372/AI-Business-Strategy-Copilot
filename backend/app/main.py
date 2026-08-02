@@ -25,6 +25,7 @@ from app.api.v1.router import api_v1_router
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup and shutdown event handling."""
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION} [{settings.ENVIRONMENT.value}]...")
+    settings.validate_production_env()
     try:
         await db_manager.connect_to_database()
         await create_database_indexes()
