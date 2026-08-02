@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: ai-business-strategy-copilot
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_NAME
+        value: AI Business Strategy Copilot
+      - key: APP_VERSION
+        value: "1.0.0"
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: HOST
+        value: "0.0.0.0"
+      - key: CORS_ORIGINS
+        value: '["https://ai-business-strategy-copilot.vercel.app","https://ai-business-strategy-copilot.onrender.com","http://localhost:8080"]'
+      - key: MONGODB_URI
+        sync: false
+      - key: DATABASE_NAME
+        value: ai_strategy_copilot_dev
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "1440"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_1
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DEFAULT_AI_PROVIDER
+        value: gemini
+      - key: DEFAULT_AI_MODEL
+        value: gemini-2.0-flash
+      - key: FALLBACK_AI_PROVIDER
+        value: groq
+      - key: FALLBACK_AI_MODEL
+        value: llama-3.3-70b-versatile
+      - key: AI_MAX_TOKENS
+        value: "4096"
+      - key: AI_TEMPERATURE
+        value: "0.7"
+      - key: AI_TIMEOUT_SECONDS
+        value: "30"
+      - key: AI_MAX_RETRIES
+        value: "2"
+      - key: AI_RATE_LIMIT_PER_MINUTE
+        value: "30"
+      - key: TAVILY_API_KEY
+        sync: false

@@ -499,7 +499,7 @@ export interface InterviewCompleteResponse {
 export interface InterviewStatusResponse {
   session_id: string | null;
   startup_id: string;
-  status: "not_started" | "started" | "in_progress" | "paused" | "resumed" | "completed" | "knowledge_generated" | "all_modules_updated";
+  status: "not_started" | "started" | "in_progress" | "paused" | "stopped" | "resumed" | "completed" | "knowledge_generated" | "all_modules_updated";
   current_question_number: number;
   total_questions: number;
   progress_percentage: number;

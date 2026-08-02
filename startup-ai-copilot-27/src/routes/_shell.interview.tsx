@@ -211,6 +211,23 @@ function Interview() {
             `Interview completed! Full Business Knowledge Base generated for ${activeStartup.name}. All 8 journey modules have been updated.`,
         };
         setMessages([completionMsg]);
+      } else if (res.status === "stopped") {
+        setSessionId(res.session_id);
+        setIsPaused(true);
+        setIsComplete(false);
+        const history: Msg[] = [
+          {
+            role: "ai",
+            text: `Interview for ${activeStartup.name} is currently STOPPED. Click 'Resume Interview' or 'Restart Interview' to continue.`,
+          },
+        ];
+        for (const qa of res.qa_history) {
+          history.push({ role: "ai", text: qa.question, acknowledged: qa.acknowledged, rationale: qa.rationale });
+          if (qa.answer) {
+            history.push({ role: "user", text: qa.answer });
+          }
+        }
+        setMessages(history);
       } else if (res.status === "paused") {
         setSessionId(res.session_id);
         setIsPaused(true);
@@ -415,9 +432,8 @@ function Interview() {
   const handlePause = async () => {
     try {
       await aiModulesService.pauseInterview();
-      setIsPaused(true);
-      setStatus("paused");
       toast.info("Interview paused. Your answers and progress are saved.");
+      await loadStatus();
     } catch (err: any) {
       toast.error(err?.message || "Failed to pause interview.");
     }
@@ -426,13 +442,9 @@ function Interview() {
   // Resume interview
   const handleResume = async () => {
     try {
-      const res = await aiModulesService.resumeInterview();
-      setIsPaused(false);
-      setStatus(res.status || "in_progress");
-      if (res.first_question) {
-        setCurrentQuestion(res.first_question);
-      }
+      await aiModulesService.resumeInterview();
       toast.success("Interview resumed! Continuing from your current question.");
+      await loadStatus();
     } catch (err: any) {
       toast.error(err?.message || "Failed to resume interview.");
     }
@@ -443,9 +455,8 @@ function Interview() {
     setShowStopConfirm(false);
     try {
       await aiModulesService.stopInterview();
-      setIsPaused(true);
-      setStatus("paused");
       toast.info("Interview stopped. Saved answers remain preserved.");
+      await loadStatus();
     } catch (err: any) {
       toast.error(err?.message || "Failed to stop interview.");
     }
@@ -456,8 +467,8 @@ function Interview() {
     setShowRestartConfirm(false);
     try {
       await aiModulesService.restartInterview();
-      await handleStartInterview();
       toast.success("Interview restarted! Cleared previous session.");
+      await loadStatus();
     } catch (err: any) {
       toast.error(err?.message || "Failed to restart interview.");
     }
@@ -484,33 +495,45 @@ function Interview() {
         title="AI Business Diagnostic Interview"
         subtitle="An enterprise AI consultation that extracts structured business intelligence, builds your Business Knowledge Base, and powers all downstream AI modules."
         actions={
-          isComplete ? (
+          isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status) ? (
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-600 border border-emerald-500/20 flex items-center gap-1.5 shadow-sm">
                 <CheckCircle2 className="size-4" /> Interview Completed
               </span>
-              <Button variant="hero" asChild>
-                <Link to="/validation">
-                  Explore Validation <ArrowRight className="size-4" />
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/profile">View Business Profile</Link>
+              </Button>
+              <Button variant="hero" size="sm" asChild>
+                <Link to="/reports">
+                  Generate Reports <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </div>
-          ) : sessionId ? (
+          ) : status === "stopped" ? (
             <div className="flex items-center gap-2.5">
-              {isPaused ? (
-                <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50">
-                  <Play className="size-3.5 fill-current" /> Resume Interview
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={handlePause} className="gap-1.5 text-muted-foreground">
-                  <Pause className="size-3.5" /> Pause
-                </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
-                <Square className="size-3.5" /> Stop
+              <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 font-semibold">
+                <Play className="size-3.5 fill-current text-emerald-600" /> ▶ Resume Interview
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-muted-foreground">
-                <RotateCcw className="size-3.5" /> Restart
+              <Button variant="outline" size="sm" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-amber-600 hover:text-amber-700 font-semibold border-amber-500/30">
+                <RotateCcw className="size-3.5" /> 🔄 Restart Interview
+              </Button>
+            </div>
+          ) : status === "paused" ? (
+            <div className="flex items-center gap-2.5">
+              <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50">
+                <Play className="size-3.5 fill-current" /> Resume Interview
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
+                <Square className="size-3.5" /> Stop Interview
+              </Button>
+            </div>
+          ) : sessionId && (status === "in_progress" || status === "started" || status === "resumed") ? (
+            <div className="flex items-center gap-2.5">
+              <Button variant="outline" size="sm" onClick={handlePause} className="gap-1.5 text-muted-foreground">
+                <Pause className="size-3.5" /> Pause Interview
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
+                <Square className="size-3.5" /> Stop Interview
               </Button>
             </div>
           ) : (
@@ -657,9 +680,11 @@ function Interview() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-foreground">AI Business Consultant</p>
                   <p className="text-xs text-muted-foreground">
-                    {isPaused
+                    {status === "stopped"
+                      ? "Session Stopped · Answers Preserved"
+                      : status === "paused"
                       ? "Session Paused · Answers Saved"
-                      : isComplete
+                      : isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status)
                       ? "Interview Complete · Knowledge Base Generated"
                       : `Question ${Math.min(questionNumber, totalQuestions)} of ${totalQuestions} · ~${estimatedMinutes} mins remaining`}
                   </p>

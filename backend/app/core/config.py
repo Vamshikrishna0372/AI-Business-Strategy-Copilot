@@ -29,7 +29,16 @@ class Settings(BaseSettings):
     HOST: str = Field(default="0.0.0.0", description="Server Host IP")
     PORT: int = Field(default=8000, description="Server Port Number")
     CORS_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],
+        default=[
+            "http://localhost:8080",
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:8080",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "https://ai-business-strategy-copilot.vercel.app",
+            "https://ai-business-strategy-copilot.onrender.com",
+        ],
         description="Allowed CORS Origins"
     )
 

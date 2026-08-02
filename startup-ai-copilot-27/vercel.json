@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": ".output/public",
+  "installCommand": "npm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,PATCH,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Authorization,Content-Type,X-Startup-ID" }
+      ]
+    }
+  ],
+  "env": {
+    "VITE_API_BASE_URL": "https://ai-business-strategy-copilot.onrender.com",
+    "VITE_APP_NAME": "AI Business Strategy Copilot",
+    "VITE_GOOGLE_CLIENT_ID": "729000417397-bi71cdt1hql1isaa37rkcg9j9df99fqe.apps.googleusercontent.com"
+  }
+}

@@ -1,8 +1,15 @@
 /**
- * Centralized API Client with JWT Auth Injection, Startup Context Header, and Error Handling.
+ * Centralized API Client — uses VITE_API_BASE_URL environment variable.
+ * Development:  http://localhost:8000
+ * Production:   https://ai-business-strategy-copilot.onrender.com
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// The env var is injected at build time by Vite from .env / .env.production
+const BASE_URL: string =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? "https://ai-business-strategy-copilot.onrender.com"
+    : "http://localhost:8000");
 
 export class ApiError extends Error {
   status: number;
@@ -56,8 +63,10 @@ export function setActiveStartupId(id: string | null): void {
   }
 }
 
-async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = endpoint.startsWith("http") ? endpoint : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+async function request<T = any>(endpoint: string, options: RequestInit = {}, retries = 1): Promise<T> {
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -70,20 +79,21 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   }
 
   const activeStartupId = getActiveStartupId();
-  if (activeStartupId && activeStartupId !== "null" && activeStartupId !== "undefined" && !headers["X-Startup-ID"]) {
+  if (
+    activeStartupId &&
+    activeStartupId !== "null" &&
+    activeStartupId !== "undefined" &&
+    !headers["X-Startup-ID"]
+  ) {
     headers["X-Startup-ID"] = activeStartupId;
   }
 
-  const config: RequestInit = {
-    ...options,
-    headers,
-  };
+  const config: RequestInit = { ...options, headers };
 
   try {
     const response = await fetch(url, config);
 
     if (response.status === 401) {
-      // Clear expired auth session
       setStoredToken(null);
       if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
         window.location.href = "/auth";
@@ -93,16 +103,30 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const errorMessage = data?.error?.message || data?.message || data?.detail || `API request failed with status ${response.status}`;
+      const errorMessage =
+        data?.error?.message ||
+        data?.message ||
+        data?.detail ||
+        `API request failed with status ${response.status}`;
       throw new ApiError(errorMessage, response.status, data);
     }
 
     return data as T;
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
+    if (error instanceof ApiError) throw error;
+
+    // Render cold-start: retry once on network failure (timeout/ECONNRESET)
+    if (retries > 0) {
+      await new Promise((res) => setTimeout(res, 3000));
+      return request<T>(endpoint, options, retries - 1);
     }
-    throw new ApiError(error instanceof Error ? error.message : "Network error connecting to backend API", 0);
+
+    throw new ApiError(
+      error instanceof Error
+        ? error.message
+        : "Network error — backend may be waking up. Please retry in a moment.",
+      0
+    );
   }
 }
 
@@ -121,4 +145,7 @@ export const apiClient = {
 
   delete: <T = any>(endpoint: string, headers?: Record<string, string>) =>
     request<T>(endpoint, { method: "DELETE", headers }),
+
+  /** Exposes the resolved base URL for debugging / health checks */
+  getBaseUrl: () => BASE_URL,
 };
