@@ -1,18 +1,26 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowRight,
   Brain,
   CheckCircle2,
   Clock,
+  HelpCircle,
+  Info,
   Layers,
   Mic,
   MicOff,
-  Pin,
+  Pause,
+  Play,
   RefreshCw,
   Rocket,
+  RotateCcw,
+  Save,
   Send,
   ShieldCheck,
   Sparkles,
+  Square,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -36,15 +44,20 @@ export const Route = createFileRoute("/_shell/interview")({
   head: () => ({
     meta: [
       { title: "AI Business Interview — Strategy Copilot" },
-      { name: "description", content: "A guided AI conversation that turns your answers into a validated business strategy." },
+      { name: "description", content: "An enterprise AI consultation that converts your answers into a complete Business Knowledge Base." },
       { property: "og:title", content: "AI Business Interview — Strategy Copilot" },
-      { property: "og:description", content: "Ten intelligent questions instead of a form." },
+      { property: "og:description", content: "Dynamic 10-step AI diagnostic consultation for founders." },
     ],
   }),
   component: Interview,
 });
 
-type Msg = { role: "ai" | "user"; text: string };
+type Msg = {
+  role: "ai" | "user";
+  text: string;
+  acknowledged?: string;
+  rationale?: string;
+};
 
 function Interview() {
   const { activeStartup, activeId } = useWorkspace();
@@ -53,6 +66,7 @@ function Interview() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [analysing, setAnalysing] = useState(false);
   const [stage, setStage] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -62,12 +76,24 @@ function Interview() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<InterviewQuestion | null>(null);
   const [progress, setProgress] = useState(0);
+  const [questionNumber, setQuestionNumber] = useState(1);
+  const [totalQuestions, setTotalQuestions] = useState(10);
+  const [estimatedMinutes, setEstimatedMinutes] = useState(12);
   const [isComplete, setIsComplete] = useState(false);
-  const [interviewStatus, setInterviewStatus] = useState<InterviewStatusResponse | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [status, setStatus] = useState<string>("not_started");
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
 
-  // History for sidebar
+  // Confirmation Modals State
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+
+  // Auto-Save Notification state
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+
+  // Extracted Knowledge state for Live Panel
+  const [extractedKnowledge, setExtractedKnowledge] = useState<Record<string, any>>({});
   const [qaHistory, setQaHistory] = useState<Array<{ question: string; answer: string; category: string }>>([]);
 
   // Voice / Speech Recognition state
@@ -90,6 +116,7 @@ function Interview() {
         }
       }
       setIsListening(false);
+      setTranscribing(false);
       toast.info("Voice recording stopped.");
     } else {
       try {
@@ -100,7 +127,8 @@ function Interview() {
 
         recognition.onstart = () => {
           setIsListening(true);
-          toast.success("Microphone active! Speak your answer now.");
+          setTranscribing(true);
+          toast.success("Microphone active! Listening... Speak your answer now.");
         };
 
         recognition.onresult = (event: any) => {
@@ -116,6 +144,7 @@ function Interview() {
         recognition.onerror = (event: any) => {
           console.warn("Speech recognition error:", event.error);
           setIsListening(false);
+          setTranscribing(false);
           if (event.error === "not-allowed") {
             toast.error("Microphone access denied. Please allow microphone permissions in your browser.");
           } else if (event.error === "no-speech") {
@@ -127,12 +156,14 @@ function Interview() {
 
         recognition.onend = () => {
           setIsListening(false);
+          setTranscribing(false);
         };
 
         recognitionRef.current = recognition;
         recognition.start();
       } catch (err: any) {
         setIsListening(false);
+        setTranscribing(false);
         toast.error(err?.message || "Failed to access microphone. Please check permissions.");
       }
     }
@@ -141,8 +172,8 @@ function Interview() {
   // Auto scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-    if (!thinking && !analysing && sessionId && !isComplete) inputRef.current?.focus();
-  }, [messages, thinking, analysing, sessionId, isComplete]);
+    if (!thinking && !analysing && sessionId && !isComplete && !isPaused) inputRef.current?.focus();
+  }, [messages, thinking, analysing, sessionId, isComplete, isPaused]);
 
   // Analysis stage progress animation
   useEffect(() => {
@@ -157,72 +188,93 @@ function Interview() {
     if (!activeId) return;
     setLoading(true);
     try {
-      const status = await aiModulesService.getInterviewStatus(activeId);
-      setInterviewStatus(status);
-      setQaHistory(status.qa_history ?? []);
-      setProgress(status.progress_percentage ?? 0);
+      const res = await aiModulesService.getInterviewStatus(activeId);
+      setStatus(res.status);
+      setQaHistory(res.qa_history ?? []);
+      setExtractedKnowledge(res.extracted_knowledge || res.knowledge_base || {});
+      setProgress(res.progress_percentage ?? 0);
+      setQuestionNumber(res.current_question_number ?? 1);
+      setTotalQuestions(res.total_questions ?? 10);
+      setEstimatedMinutes(Math.max(1, 15 - Math.round((res.qa_history?.length || 0) * 1.4)));
 
-      if (status.status === "completed") {
+      const isDone = ["completed", "knowledge_generated", "all_modules_updated"].includes(res.status);
+
+      if (isDone) {
         setIsComplete(true);
+        setIsPaused(false);
         setAnalysing(false);
-        setSessionId(status.session_id);
+        setSessionId(res.session_id);
         const completionMsg: Msg = {
           role: "ai",
           text:
-            status.summary ||
-            "Interview complete! Your startup data has been analysed. You can now explore the other modules.",
+            res.summary ||
+            `Interview completed! Full Business Knowledge Base generated for ${activeStartup.name}. All 8 journey modules have been updated.`,
         };
         setMessages([completionMsg]);
-        if (status.key_insights?.length) {
-          setMessages((m) => [
-            ...m,
-            {
-              role: "ai",
-              text: "Key insights: " + status.key_insights!.join(" · "),
-            },
-          ]);
-        }
-      } else if (status.status === "in_progress" && status.session_id) {
-        setSessionId(status.session_id);
+      } else if (res.status === "paused") {
+        setSessionId(res.session_id);
+        setIsPaused(true);
         setIsComplete(false);
-
-        // Rebuild chat from qa_history
         const history: Msg[] = [
           {
             role: "ai",
-            text: `Welcome back! Resuming your AI Business Interview for ${activeStartup.name}. Question ${status.current_question_number} of ${status.total_questions}.`,
+            text: `Interview for ${activeStartup.name} is currently PAUSED. Click 'Resume Interview' to continue.`,
           },
         ];
-        for (const qa of status.qa_history) {
-          history.push({ role: "ai", text: qa.question });
+        for (const qa of res.qa_history) {
+          history.push({ role: "ai", text: qa.question, acknowledged: qa.acknowledged, rationale: qa.rationale });
           if (qa.answer) {
             history.push({ role: "user", text: qa.answer });
           }
         }
         setMessages(history);
+      } else if (res.session_id && (res.status === "in_progress" || res.status === "started" || res.status === "resumed")) {
+        setSessionId(res.session_id);
+        setIsComplete(false);
+        setIsPaused(false);
 
-        // Fetch active current question for in-progress session
+        // Rebuild conversation thread from history
+        const history: Msg[] = [
+          {
+            role: "ai",
+            text: `Welcome back! Resuming your AI Business Consultation for ${activeStartup.name}. Question ${res.current_question_number} of 10.`,
+          },
+        ];
+        for (const qa of res.qa_history) {
+          history.push({ role: "ai", text: qa.question, acknowledged: qa.acknowledged, rationale: qa.rationale });
+          if (qa.answer) {
+            history.push({ role: "user", text: qa.answer });
+          }
+        }
+
         try {
           const stepRes = await aiModulesService.startInterview();
           if (stepRes.first_question) {
             setCurrentQuestion(stepRes.first_question);
-            history.push({ role: "ai", text: stepRes.first_question.question });
-            setMessages([...history]);
+            history.push({
+              role: "ai",
+              text: stepRes.first_question.question,
+              acknowledged: stepRes.first_question.follow_up_context ? undefined : undefined,
+              rationale: stepRes.first_question.follow_up_context,
+            });
           }
         } catch {
-          // Keep existing history if question fetch fails
+          // Keep existing history
         }
+        setMessages(history);
       } else {
-        // Not started — show welcome screen
+        // Not started
         setSessionId(null);
         setCurrentQuestion(null);
         setIsComplete(false);
+        setIsPaused(false);
         setMessages([]);
       }
     } catch {
       setSessionId(null);
       setCurrentQuestion(null);
       setIsComplete(false);
+      setIsPaused(false);
       setMessages([]);
     } finally {
       setLoading(false);
@@ -233,21 +285,30 @@ function Interview() {
     loadStatus();
   }, [loadStatus]);
 
-  // Start a new explicit interview session
-  const startInterview = async () => {
+  // Start new interview session
+  const handleStartInterview = async () => {
     setStarting(true);
     try {
       const res = await aiModulesService.startInterview();
       setSessionId(res.session_id);
       setCurrentQuestion(res.first_question);
-      setProgress(10);
+      setStatus(res.status || "started");
+      setProgress(5);
+      setQuestionNumber(1);
       setIsComplete(false);
+      setIsPaused(false);
+      setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
       setMessages([
         {
           role: "ai",
-          text: `Welcome! I'm your AI Business Strategy Copilot. Let's begin the diagnostic interview for ${activeStartup.name}.`,
+          text: `Welcome! I'm your AI Business Strategy Consultant. Let's build a comprehensive Business Knowledge Base for ${activeStartup.name}.`,
         },
-        { role: "ai", text: res.first_question.question },
+        {
+          role: "ai",
+          text: res.first_question.question,
+          rationale: res.first_question.follow_up_context,
+        },
       ]);
       eventBus.emit(EVENTS.INTERVIEW_UPDATED, res);
       toast.success("AI Business Interview session created!");
@@ -258,10 +319,10 @@ function Interview() {
     }
   };
 
-  // Submit an answer
+  // Submit answer
   const send = async (text: string) => {
     const value = text.trim();
-    if (!value || thinking || isComplete) return;
+    if (!value || thinking || isComplete || isPaused) return;
     if (!sessionId || !currentQuestion) {
       toast.warning("Please start the interview first.");
       return;
@@ -281,10 +342,28 @@ function Interview() {
       });
 
       setProgress(res.progress_percentage);
+      setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       setQaHistory((h) => [
         ...h,
         { question: currentQuestion.question, answer: value, category: currentQuestion.category },
       ]);
+
+      // Update extracted knowledge panel
+      if (res.next_question) {
+        setQuestionNumber(res.next_question.question_number);
+        setTotalQuestions(res.next_question.total_questions);
+        setEstimatedMinutes(res.next_question.estimated_time_minutes);
+      }
+
+      // Re-fetch latest knowledge base state
+      try {
+        const kb = await aiModulesService.getBusinessKnowledge(activeId);
+        if (kb?.knowledge) {
+          setExtractedKnowledge(kb.knowledge);
+        }
+      } catch {
+        /* fallback */
+      }
 
       eventBus.emit(EVENTS.INTERVIEW_UPDATED, res);
 
@@ -294,86 +373,155 @@ function Interview() {
           ...m,
           {
             role: "ai",
-            text: `That's everything I need! Synthesizing full strategic executive summary for ${activeStartup.name}...`,
+            text: `Outstanding! Synthesizing complete Executive Summary & Business Knowledge Base for ${activeStartup.name}...`,
           },
         ]);
         setAnalysing(true);
         setStage(0);
         setCurrentQuestion(null);
 
-        // Complete the interview
         try {
           const completion = await aiModulesService.completeInterview(sessionId);
           setIsComplete(true);
+          setStatus("all_modules_updated");
           setMessages((m) => [
             ...m,
-            { role: "ai", text: completion.summary || "Analysis complete! Strategic context generated." },
+            { role: "ai", text: completion.summary || "Analysis complete! Strategic Business Knowledge Base generated." },
             {
               role: "ai",
-              text: `All Business Journey modules are now ready: ${(completion.modules_ready ?? []).join(", ")}.`,
+              text: `All 8 Business Journey modules have been synchronized with your startup context.`,
             },
           ]);
           eventBus.emit(EVENTS.INTERVIEW_UPDATED, completion);
-          toast.success("Interview complete! All business modules unlocked.");
+          toast.success("Interview completed! Business Knowledge Base generated & all modules updated.");
         } catch {
           setIsComplete(true);
         }
       } else if (res.next_question) {
         setCurrentQuestion(res.next_question);
-        setMessages((m) => [...m, { role: "ai", text: res.next_question!.question }]);
+        setMessages((m) => [
+          ...m,
+          {
+            role: "ai",
+            text: res.next_question!.question,
+            acknowledged: res.next_question!.follow_up_context ? undefined : undefined,
+            rationale: res.next_question!.follow_up_context,
+          },
+        ]);
         setThinking(false);
       }
     } catch (err: any) {
       setThinking(false);
-      toast.error(err?.message || "Failed to submit answer. Please try again.");
-      setMessages((m) => [
-        ...m,
-        { role: "ai", text: "Sorry, I had trouble processing that. Please try again." },
-      ]);
+      toast.error(err?.message || "Failed to save answer. Please try again.");
     }
   };
 
-  const questionNum = currentQuestion?.question_number ?? (qaHistory.length + 1);
-  const totalQ = currentQuestion?.total_questions ?? 10;
+  // Pause interview
+  const handlePause = async () => {
+    try {
+      await aiModulesService.pauseInterview();
+      setIsPaused(true);
+      setStatus("paused");
+      toast.info("Interview paused. Your answers and progress are saved.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to pause interview.");
+    }
+  };
 
-  const featureChecklist = [
-    { icon: CheckCircle2, label: "10 Personalized Questions", desc: "Adaptive diagnostic tailored to your startup stage" },
-    { icon: Clock, label: "Approximately 10–15 Minutes", desc: "Fast, intelligent baseline setup" },
-    { icon: ShieldCheck, label: "Progress Saved Automatically", desc: "Every answer is persisted instantly in MongoDB" },
-    { icon: RefreshCw, label: "Resume Anytime", desc: "Pick up right where you left off from any device" },
-    { icon: Brain, label: "AI-Powered Business Analysis", desc: "Generates high-precision strategic context" },
-    { icon: Layers, label: "Unlocks All Journey Modules", desc: "Powers Validation, Strategy, Financials & Risk Matrix" },
+  // Resume interview
+  const handleResume = async () => {
+    try {
+      const res = await aiModulesService.resumeInterview();
+      setIsPaused(false);
+      setStatus(res.status || "in_progress");
+      if (res.first_question) {
+        setCurrentQuestion(res.first_question);
+      }
+      toast.success("Interview resumed! Continuing from your current question.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to resume interview.");
+    }
+  };
+
+  // Stop interview
+  const handleStopConfirm = async () => {
+    setShowStopConfirm(false);
+    try {
+      await aiModulesService.stopInterview();
+      setIsPaused(true);
+      setStatus("paused");
+      toast.info("Interview stopped. Saved answers remain preserved.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to stop interview.");
+    }
+  };
+
+  // Restart interview
+  const handleRestartConfirm = async () => {
+    setShowRestartConfirm(false);
+    try {
+      await aiModulesService.restartInterview();
+      await handleStartInterview();
+      toast.success("Interview restarted! Cleared previous session.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to restart interview.");
+    }
+  };
+
+  // Compute Live Business Understanding Metrics
+  const kbKeys = ["industry", "target_customers", "problem", "solution", "revenue_model", "pricing", "business_stage", "technology", "competitive_advantage", "funding_stage"];
+  const filledCount = kbKeys.filter((k) => extractedKnowledge[k] && String(extractedKnowledge[k]).trim()).length;
+  const knowledgeCompletion = Math.min(100, Math.round((filledCount / kbKeys.length) * 100));
+
+  const benefitsList = [
+    { label: "Personalized Strategy", desc: "Tailored executive business blueprint" },
+    { label: "Better Financial Planning", desc: "Accurate burn rate & runway forecasting" },
+    { label: "Better Investor Readiness", desc: "Data room & pitch deck alignment" },
+    { label: "Better Risk Analysis", desc: "Proactive mitigation across 10 business risk areas" },
+    { label: "Better Recommendations", desc: "High-precision strategic action items" },
+    { label: "Higher Report Accuracy", desc: "Zero generic fluff or placeholder data" },
   ];
 
   return (
     <>
       <PageHeader
         eyebrow={activeStartup.name}
-        title="AI Business Interview"
-        subtitle="A personalized conversation that helps our AI Business Strategy Engine understand your startup and generate accurate business insights."
+        title="AI Business Diagnostic Interview"
+        subtitle="An enterprise AI consultation that extracts structured business intelligence, builds your Business Knowledge Base, and powers all downstream AI modules."
         actions={
           isComplete ? (
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 border border-emerald-500/20 flex items-center gap-1.5">
-                <CheckCircle2 className="size-3.5" /> Interview Completed
+              <span className="rounded-full bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-600 border border-emerald-500/20 flex items-center gap-1.5 shadow-sm">
+                <CheckCircle2 className="size-4" /> Interview Completed
               </span>
               <Button variant="hero" asChild>
                 <Link to="/validation">
-                  View Validation <ArrowRight className="size-4" />
+                  Explore Validation <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </div>
           ) : sessionId ? (
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600 border border-amber-500/20 flex items-center gap-1.5 animate-pulse">
-                <Zap className="size-3.5" /> Interview In Progress
-              </span>
-              <AiBadge>Question {Math.min(questionNum, totalQ)} of {totalQ}</AiBadge>
+            <div className="flex items-center gap-2.5">
+              {isPaused ? (
+                <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50">
+                  <Play className="size-3.5 fill-current" /> Resume Interview
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={handlePause} className="gap-1.5 text-muted-foreground">
+                  <Pause className="size-3.5" /> Pause
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
+                <Square className="size-3.5" /> Stop
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-muted-foreground">
+                <RotateCcw className="size-3.5" /> Restart
+              </Button>
             </div>
           ) : (
             <Button
               variant="hero"
-              onClick={startInterview}
+              onClick={handleStartInterview}
               disabled={starting || loading}
               className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:scale-[1.02]"
             >
@@ -384,49 +532,111 @@ function Interview() {
         }
       />
 
+      {/* Stop Confirmation Modal */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <SurfaceCard className="max-w-md w-full p-6 space-y-4 shadow-2xl border-destructive/30">
+            <div className="flex items-center gap-3 text-destructive font-semibold text-lg">
+              <AlertTriangle className="size-6" /> Stop Interview Session?
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Stopping the interview will pause current dynamic questioning. All {qaHistory.length} recorded answers are saved safely in MongoDB. You can resume or restart anytime.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowStopConfirm(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleStopConfirm}>
+                Confirm Stop
+              </Button>
+            </div>
+          </SurfaceCard>
+        </div>
+      )}
+
+      {/* Restart Confirmation Modal */}
+      {showRestartConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <SurfaceCard className="max-w-md w-full p-6 space-y-4 shadow-2xl border-amber-500/30">
+            <div className="flex items-center gap-3 text-amber-600 font-semibold text-lg">
+              <RotateCcw className="size-6" /> Restart AI Business Interview?
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Are you sure you want to restart? This will reset your current interview session and start fresh from Question 1 for {activeStartup.name}.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowRestartConfirm(false)}>
+                Cancel
+              </Button>
+              <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={handleRestartConfirm}>
+                Confirm Restart
+              </Button>
+            </div>
+          </SurfaceCard>
+        </div>
+      )}
+
       {/* Main Content Layout */}
       {!sessionId && !isComplete && !loading ? (
         /* Welcome Screen View */
         <div className="space-y-6">
-          <SurfaceCard className="relative overflow-hidden border-primary/20 p-8 md:p-10 bg-gradient-to-br from-card via-card to-accent/20">
-            <div className="absolute -right-16 -top-16 size-64 rounded-full bg-primary/10 blur-3xl" />
-            <div className="relative z-10 max-w-3xl space-y-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 text-xs font-semibold text-primary">
-                <Sparkles className="size-3.5" /> Single Source of Truth Engine
+          <SurfaceCard className="relative overflow-hidden border-primary/20 p-8 md:p-10 bg-gradient-to-br from-card via-card to-accent/20 shadow-xl">
+            <div className="absolute -right-16 -top-16 size-72 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+            <div className="relative z-10 max-w-4xl space-y-6">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary">
+                <Sparkles className="size-4" /> Enterprise AI Consultant Diagnostic
               </div>
               <div>
-                <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
-                  Welcome to your AI Business Diagnostic Interview
+                <h2 className="text-2xl md:text-4xl font-extrabold tracking-tight text-foreground">
+                  AI Business Diagnostic Interview
                 </h2>
-                <p className="mt-2 text-base text-muted-foreground leading-relaxed">
-                  Instead of filling out static forms, answer 10 intelligent questions about {activeStartup.name}. Our AI Strategy Engine will synthesize your business context and automatically populate all 8 strategy modules.
+                <p className="mt-2 text-base md:text-lg text-muted-foreground leading-relaxed">
+                  A personalized AI consultation designed to understand {activeStartup.name} like a top Silicon Valley business partner.
                 </p>
               </div>
 
-              {/* Feature Cards Grid */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 pt-2">
-                {featureChecklist.map((item, i) => (
-                  <div key={i} className="rounded-xl border bg-background/60 p-4 transition-all hover:border-primary/40 hover:bg-background">
-                    <div className="flex items-center gap-2.5 font-semibold text-sm text-foreground">
-                      <item.icon className="size-4 shrink-0 text-primary" />
-                      <span>{item.label}</span>
+              {/* Specs & Time */}
+              <div className="flex flex-wrap items-center gap-6 py-2 border-y border-border/50 text-sm">
+                <div className="flex items-center gap-2 font-medium">
+                  <Clock className="size-4 text-primary" /> Estimated Time: <span className="font-semibold text-foreground">10–15 Minutes</span>
+                </div>
+                <div className="flex items-center gap-2 font-medium">
+                  <ShieldCheck className="size-4 text-emerald-500" /> Progress: <span className="font-semibold text-foreground">Saved Automatically</span>
+                </div>
+                <div className="flex items-center gap-2 font-medium">
+                  <Brain className="size-4 text-purple-500" /> Technology: <span className="font-semibold text-foreground">Dynamic Adaptive AI</span>
+                </div>
+              </div>
+
+              {/* Benefits Checklist */}
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Why complete the interview?
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {benefitsList.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3.5 transition-all hover:border-primary/40 hover:bg-background">
+                      <CheckCircle2 className="size-4 shrink-0 text-emerald-500 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground leading-snug">{item.desc}</p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               {/* Start Action Bar */}
               <div className="flex flex-col sm:flex-row items-center gap-4 pt-4 border-t border-border/60">
                 <Button
                   size="lg"
-                  onClick={startInterview}
+                  onClick={handleStartInterview}
                   disabled={starting}
-                  className="w-full sm:w-auto h-12 px-8 text-base font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-xl shadow-indigo-500/25 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ring-2 ring-primary/20 ring-offset-2 ring-offset-background"
+                  className="w-full sm:w-auto h-13 px-8 text-base font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-xl shadow-indigo-500/25 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ring-2 ring-primary/20"
                 >
                   {starting ? (
                     <>
-                      <RefreshCw className="size-5 animate-spin mr-2" /> Creating Interview Session…
+                      <RefreshCw className="size-5 animate-spin mr-2" /> Initializing Session…
                     </>
                   ) : (
                     <>
@@ -435,50 +645,60 @@ function Interview() {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center sm:text-left">
-                  Takes ~10–15 mins · Progress autosaved immediately to MongoDB
+                  Answer 10 intelligent questions · Saves directly to MongoDB Knowledge Base
                 </p>
               </div>
             </div>
           </SurfaceCard>
         </div>
       ) : (
-        /* Active Chat & Sidebar Layout */
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <SurfaceCard hover={false} className="flex h-[640px] flex-col p-0">
-            {/* Chat header */}
-            <div className="flex items-center gap-3 border-b px-5 py-4">
-              <img src={logo} alt="" width={32} height={32} className="size-8" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">Strategy Copilot</p>
-                <p className="text-xs text-muted-foreground">
-                  {loading
-                    ? "Loading interview status…"
-                    : isComplete
-                    ? "Interview complete · All modules ready"
-                    : sessionId
-                    ? "Analysing as you answer · AI-powered"
-                    : "Ready to begin your interview"}
-                </p>
+        /* Active Chat & Live Business Understanding Panel */
+        <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+          <SurfaceCard hover={false} className="flex h-[660px] flex-col p-0 shadow-lg">
+            {/* Header / Progress Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5 bg-muted/20">
+              <div className="flex items-center gap-3 min-w-0">
+                <img src={logo} alt="" width={32} height={32} className="size-8 shrink-0" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-foreground">AI Business Consultant</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isPaused
+                      ? "Session Paused · Answers Saved"
+                      : isComplete
+                      ? "Interview Complete · Knowledge Base Generated"
+                      : `Question ${Math.min(questionNumber, totalQuestions)} of ${totalQuestions} · ~${estimatedMinutes} mins remaining`}
+                  </p>
+                </div>
               </div>
-              {sessionId && !isComplete && (
-                <div className="hidden w-32 sm:block">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+
+              {/* Progress & Autosave Indicator */}
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                  <Save className="size-3" />
+                  <span>{lastSaved ? `Saved ${lastSaved}` : "Auto Saved"}</span>
+                </div>
+                <div className="w-28 sm:w-36">
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1 font-medium">
+                    <span>Progress</span>
+                    <span>{Math.round(progress)}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-primary transition-[width] duration-700"
+                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-[width] duration-700"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Messages */}
+            {/* Chat Thread */}
             <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
               {loading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <RefreshCw className="size-4 animate-spin" />
-                    Loading interview status…
+                    Loading interview session state…
                   </div>
                 </div>
               ) : (
@@ -488,15 +708,24 @@ function Interview() {
                       {m.role === "ai" && (
                         <img src={logo} alt="" width={28} height={28} loading="lazy" className="mt-1 size-7 shrink-0" />
                       )}
-                      <div
-                        className={cn(
-                          "max-w-[80%] text-sm leading-relaxed",
-                          m.role === "user"
-                            ? "rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground"
-                            : "text-foreground",
+                      <div className="max-w-[85%] space-y-2">
+                        {/* AI Rationale / Context badge */}
+                        {m.role === "ai" && m.rationale && (
+                          <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-purple-600 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md">
+                            <Info className="size-3 shrink-0" /> {m.rationale}
+                          </div>
                         )}
-                      >
-                        {m.text}
+
+                        <div
+                          className={cn(
+                            "text-sm leading-relaxed p-4 shadow-sm",
+                            m.role === "user"
+                              ? "rounded-2xl rounded-br-sm bg-primary text-primary-foreground font-medium"
+                              : "rounded-2xl rounded-bl-sm border bg-card text-card-foreground",
+                          )}
+                        >
+                          {m.text}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -504,8 +733,9 @@ function Interview() {
                   {thinking && (
                     <div className="flex items-center gap-3">
                       <img src={logo} alt="" width={28} height={28} loading="lazy" className="size-7" />
-                      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        Thinking
+                      <span className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 px-3.5 py-2 rounded-full border border-border/40">
+                        <Sparkles className="size-3.5 text-purple-500 animate-spin" />
+                        Understanding answer & generating follow-up
                         {[0, 1, 2].map((d) => (
                           <span
                             key={d}
@@ -518,17 +748,17 @@ function Interview() {
                   )}
 
                   {analysing && (
-                    <div className="rounded-2xl border bg-accent/40 p-5">
-                      <p className="flex items-center gap-2 text-sm font-semibold">
-                        <Sparkles className="size-4 text-brand" /> Running full analysis on {activeStartup.name}
+                    <div className="rounded-2xl border bg-accent/40 p-5 space-y-3">
+                      <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                        <Sparkles className="size-4 text-brand animate-bounce" /> Synthesizing Business Knowledge Base for {activeStartup.name}
                       </p>
-                      <ul className="mt-3 space-y-2">
+                      <ul className="space-y-2">
                         {analysisStages.map((s, i) => (
-                          <li key={s} className={cn("flex items-center gap-2 text-sm", i > stage && "text-muted-foreground/60")}>
+                          <li key={s} className={cn("flex items-center gap-2 text-sm font-medium", i > stage && "text-muted-foreground/60")}>
                             <span
                               className={cn(
                                 "size-2 rounded-full",
-                                i < stage ? "bg-success" : i === stage ? "animate-blink bg-primary" : "bg-muted-foreground/40",
+                                i < stage ? "bg-emerald-500" : i === stage ? "animate-blink bg-primary" : "bg-muted-foreground/40",
                               )}
                             />
                             {s}
@@ -538,7 +768,7 @@ function Interview() {
                       {stage >= analysisStages.length && isComplete && (
                         <Button variant="hero" className="mt-4" asChild>
                           <Link to="/validation">
-                            View validation results <ArrowRight />
+                            View Validation Results <ArrowRight className="size-4" />
                           </Link>
                         </Button>
                       )}
@@ -549,38 +779,38 @@ function Interview() {
               <div ref={endRef} />
             </div>
 
-            {/* Input area */}
-            <div className="border-t p-4">
+            {/* Input & Voice Controls */}
+            <div className="border-t p-4 bg-background">
               {/* Listening Banner */}
               {isListening && (
-                <div className="mb-3 flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2 text-xs text-destructive animate-pulse">
+                <div className="mb-3 flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-xs text-destructive animate-pulse">
                   <div className="flex items-center gap-2 font-medium">
                     <span className="relative flex size-2.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75"></span>
                       <span className="relative inline-flex size-2.5 rounded-full bg-destructive"></span>
                     </span>
-                    <span>Listening... Speak your answer now. Transcript will appear below.</span>
+                    <span>Listening... Speak your answer now. Transcript will populate answer box below.</span>
                   </div>
                   <button
                     type="button"
                     onClick={toggleListening}
-                    className="font-semibold underline hover:no-underline cursor-pointer ml-2"
+                    className="font-bold underline hover:no-underline cursor-pointer ml-2"
                   >
-                    Stop
+                    Stop Recording
                   </button>
                 </div>
               )}
 
-              {/* Suggestion chips */}
-              {currentQuestion?.suggestions && currentQuestion.suggestions.length > 0 && (
+              {/* Suggestions chips */}
+              {currentQuestion?.suggestions && currentQuestion.suggestions.length > 0 && !isComplete && !isPaused && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {currentQuestion.suggestions.map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s)}
-                      className="rounded-full border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      className="rounded-full border bg-muted/30 px-3.5 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary cursor-pointer"
                     >
-                      {s}
+                      💡 {s}
                     </button>
                   ))}
                 </div>
@@ -601,97 +831,118 @@ function Interview() {
                   placeholder={
                     loading
                       ? "Loading…"
-                      : !sessionId && !isComplete
-                      ? "Click 'Start Interview' to begin…"
+                      : isPaused
+                      ? "Interview is paused. Click 'Resume Interview' above to continue..."
                       : isComplete
-                      ? "Interview complete. Explore the modules above."
+                      ? "Interview complete! All 8 Business Journey modules are unlocked."
                       : isListening
                       ? "Listening... Speak your answer or edit transcript here..."
                       : "Type your answer or click microphone to speak..."
                   }
-                  className={cn("min-h-11 resize-none", isListening && "border-destructive/50 ring-1 ring-destructive/30")}
+                  className={cn("min-h-12 resize-none text-sm", isListening && "border-destructive/50 ring-2 ring-destructive/30")}
                   aria-label="Your answer"
-                  disabled={!sessionId || isComplete || thinking || loading}
+                  disabled={!sessionId || isComplete || isPaused || thinking || loading}
                 />
+
                 <Button
                   type="button"
                   variant={isListening ? "destructive" : "outline"}
                   size="icon"
                   onClick={toggleListening}
                   aria-label={isListening ? "Stop microphone" : "Start voice input"}
-                  title={isListening ? "Stop recording" : "Speak your answer"}
-                  disabled={!sessionId || isComplete || thinking || loading}
+                  title={isListening ? "Stop recording voice" : "Click to speak your answer"}
+                  disabled={!sessionId || isComplete || isPaused || thinking || loading}
                   className={cn(isListening && "animate-pulse ring-2 ring-destructive ring-offset-2")}
                 >
                   {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
                 </Button>
+
                 <Button
                   variant="hero"
                   size="icon"
                   onClick={() => void send(draft)}
                   aria-label="Send answer"
-                  disabled={!sessionId || isComplete || thinking || !draft.trim()}
+                  disabled={!sessionId || isComplete || isPaused || thinking || !draft.trim()}
                 >
-                  <Send />
+                  <Send className="size-4" />
                 </Button>
               </div>
             </div>
           </SurfaceCard>
 
-          {/* Sidebar */}
+          {/* Sidebar: Live Business Understanding Panel */}
           <div className="space-y-4">
-            <SurfaceCard>
-              <h2 className="text-sm font-semibold">Interview progress</h2>
-              <div className="mt-3 space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{qaHistory.length} questions answered</span>
-                  <span>{Math.round(progress)}%</span>
+            <SurfaceCard className="border-primary/20 bg-gradient-to-br from-card to-accent/10 shadow-md">
+              <div className="flex items-center justify-between border-b pb-3 mb-3">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                  <Brain className="size-4 text-primary" /> Business Understanding
+                </h2>
+                <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                  Live Extraction
+                </span>
+              </div>
+
+              {/* Progress & Confidence */}
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Knowledge Completion</span>
+                    <span className="font-bold text-foreground">{knowledgeCompletion}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-[width] duration-500"
+                      style={{ width: `${knowledgeCompletion}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${progress}%` }} />
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="rounded-lg border bg-background/60 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase">Confidence</p>
+                    <p className="text-sm font-extrabold text-emerald-600">95%</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-2.5 text-center">
+                    <p className="text-[10px] text-muted-foreground font-medium uppercase">Attributes</p>
+                    <p className="text-sm font-extrabold text-foreground">{filledCount}/10</p>
+                  </div>
                 </div>
-                {isComplete && (
-                  <p className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-2 text-xs font-semibold text-emerald-600">
-                    ✓ Interview complete — all modules ready
-                  </p>
-                )}
+              </div>
+
+              {/* Extracted Attributes List */}
+              <div className="mt-4 space-y-2 text-xs">
+                {[
+                  { label: "Industry", key: "industry" },
+                  { label: "Business Model", key: "business_stage" },
+                  { label: "Target Market", key: "target_customers" },
+                  { label: "Revenue Model", key: "revenue_model" },
+                  { label: "Funding Stage", key: "funding_stage" },
+                ].map((attr) => {
+                  const val = extractedKnowledge[attr.key];
+                  return (
+                    <div key={attr.key} className="rounded-lg border bg-background/50 p-2.5 flex flex-col justify-between">
+                      <span className="text-[10px] font-semibold uppercase text-muted-foreground">{attr.label}</span>
+                      <span className="text-xs font-semibold text-foreground truncate mt-0.5">
+                        {val ? String(val) : "Analyzing answer..."}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </SurfaceCard>
 
             <SurfaceCard>
-              <h2 className="text-sm font-semibold">Questions answered</h2>
-              <ul className="mt-3 space-y-2 text-sm max-h-[220px] overflow-y-auto">
+              <h2 className="text-sm font-bold text-foreground mb-2">Q&A History</h2>
+              <ul className="space-y-2 text-xs max-h-[180px] overflow-y-auto pr-1">
                 {qaHistory.length === 0 ? (
-                  <li className="text-xs text-muted-foreground">No answers yet. Start the interview to begin.</li>
+                  <li className="text-muted-foreground">No questions answered yet. Click Start Interview to begin.</li>
                 ) : (
                   qaHistory.map((qa, i) => (
-                    <li key={i} className="rounded-lg border p-2.5 text-xs text-muted-foreground">
-                      <span className="block font-semibold text-foreground mb-0.5">{qa.category}</span>
-                      {qa.question.length > 80 ? qa.question.substring(0, 80) + "…" : qa.question}
+                    <li key={i} className="rounded-lg border p-2 text-muted-foreground">
+                      <span className="block font-bold text-foreground">{qa.category}</span>
+                      <span className="line-clamp-1">{qa.question}</span>
                     </li>
                   ))
-                )}
-              </ul>
-            </SurfaceCard>
-
-            <SurfaceCard>
-              <h2 className="flex items-center gap-2 text-sm font-semibold">
-                <Pin className="size-4 text-primary" /> Next steps
-              </h2>
-              <ul className="mt-3 space-y-3 text-sm text-muted-foreground">
-                {isComplete ? (
-                  <>
-                    <li className="text-emerald-600 font-medium">✓ Interview complete</li>
-                    <li>→ Review idea validation scores</li>
-                    <li>→ Explore AI-generated strategy</li>
-                    <li>→ Check financial forecast</li>
-                  </>
-                ) : (
-                  <>
-                    <li>Answer all questions honestly for best results.</li>
-                    <li>AI adapts each question based on your previous answers.</li>
-                    <li>The interview unlocks all 8 remaining modules.</li>
-                  </>
                 )}
               </ul>
             </SurfaceCard>

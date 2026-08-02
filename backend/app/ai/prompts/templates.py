@@ -69,10 +69,10 @@ Your JSON output MUST contain:
 7. "suggestions": Array of 3 smart example responses or answer options for the founder.
 
 Return strictly formatted JSON:
-{
+{{
     "success": true,
     "message": "AI Consultant Step Processed",
-    "data": {
+    "data": {{
         "acknowledged": "...",
         "rationale": "...",
         "next_question_id": "q_00X",
@@ -81,7 +81,7 @@ Return strictly formatted JSON:
         "question_type": "text",
         "completed": false,
         "summary_so_far": "...",
-        "extracted_knowledge_delta": {
+        "extracted_knowledge_delta": {{
             "industry": "...",
             "target_customers": "...",
             "problem": "...",
@@ -93,11 +93,11 @@ Return strictly formatted JSON:
             "competitive_advantage": "...",
             "funding_stage": "...",
             "confidence": 0.95
-        }
-    },
+        }}
+    }},
     "confidence": 0.95,
     "suggestions": ["...", "...", "..."]
-}
+}}
 """,
 
     "ai_interview_summary": """
@@ -116,14 +116,14 @@ Generate:
 5. Business Context block for downstream AI modules
 
 Return JSON:
-{
+{{
     "success": true,
     "message": "Business Knowledge Base & Executive Summary Synthesized",
-    "data": {
+    "data": {{
         "business_summary": "Comprehensive executive synthesis...",
         "mission": "Clear mission statement...",
         "vision": "Bold vision statement...",
-        "executive_profile": {
+        "executive_profile": {{
             "venture_name": "...",
             "tagline": "...",
             "industry": "...",
@@ -134,14 +134,14 @@ Return JSON:
             "core_solution": "...",
             "target_audience": "...",
             "funding_stage": "..."
-        },
-        "swot_analysis": {
+        }},
+        "swot_analysis": {{
             "strengths": ["...", "..."],
             "weaknesses": ["...", "..."],
             "opportunities": ["...", "..."],
             "threats": ["...", "..."]
-        },
-        "knowledge_base": {
+        }},
+        "knowledge_base": {{
             "industry": "...",
             "target_customers": "...",
             "problem": "...",
@@ -158,12 +158,12 @@ Return JSON:
             "funding_stage": "...",
             "knowledge_completion": 100.0,
             "confidence_score": 0.95
-        },
+        }},
         "context_summary": "Clean aggregated context summary for future AI modules"
-    },
+    }},
     "confidence": 0.95,
     "suggestions": ["Review Idea Validation", "Generate Business Strategy"]
-}
+}}
 """,
 
     "idea_validation": """

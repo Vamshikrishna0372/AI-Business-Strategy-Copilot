@@ -699,16 +699,17 @@ function adaptStep(step: BackendInterviewStep, startupId: string, qaCount: numbe
     question_id: step.next_question_id || `q_${qaCount + 1}`,
     question: step.next_question || "Please describe your business concept.",
     category: step.current_section || "General",
-    question_number: qaCount + 1,
-    total_questions: 10,
+    question_number: step.current_question_number || qaCount + 1,
+    total_questions: step.total_questions || 10,
     suggestions: [],
-    estimated_time_minutes: 2,
+    estimated_time_minutes: step.estimated_time_remaining_minutes || 10,
+    follow_up_context: step.rationale_for_question,
   };
   return {
     session_id: step.interview_id,
     startup_id: startupId,
     first_question: q,
-    status: step.completed ? "completed" : "in_progress",
+    status: step.status || (step.completed ? "completed" : "in_progress"),
   };
 }
 
@@ -719,14 +720,15 @@ function adaptStepToAnswer(step: BackendInterviewStep, answered: string, startup
         question_id: step.next_question_id || "q_next",
         question: step.next_question || "Continue describing your business.",
         category: step.current_section || "General",
-        question_number: (step.qa_history?.length ?? 0) + 1,
-        total_questions: 10,
+        question_number: step.current_question_number || (step.qa_history?.length ?? 0) + 1,
+        total_questions: step.total_questions || 10,
         suggestions: [],
-        estimated_time_minutes: 2,
+        estimated_time_minutes: step.estimated_time_remaining_minutes || 8,
+        follow_up_context: step.rationale_for_question,
       };
 
   const answered_count = step.qa_history?.length ?? 0;
-  const progress = step.completed ? 100 : Math.min(95, Math.round((answered_count / 10) * 100));
+  const progress = step.progress_percentage ?? (step.completed ? 100 : Math.min(95, Math.round((answered_count / 10) * 100)));
 
   return {
     session_id: step.interview_id,
@@ -749,7 +751,7 @@ export const aiModulesService = {
       "/api/v1/ai/interview/start"
     );
     const step = res.data;
-    const startupId = step.interview_id; // best proxy — actual startup_id not returned by this endpoint
+    const startupId = step.interview_id;
     return adaptStep(step, startupId, step.qa_history?.length ?? 0);
   },
 
@@ -764,13 +766,46 @@ export const aiModulesService = {
       "/api/v1/ai/interview/answer",
       {
         question_id: payload.question_id,
-        question: payload.question || payload.question_id, // backend requires non-empty question text
+        question: payload.question || payload.question_id,
         answer: payload.answer,
         category: payload.category || "General",
       }
     );
     const step = res.data;
     return adaptStepToAnswer(step, payload.answer, step.interview_id);
+  },
+
+  async pauseInterview(): Promise<InterviewStartResponse> {
+    const res = await apiClient.post<{ success: boolean; data: BackendInterviewStep }>(
+      "/api/v1/ai/interview/pause"
+    );
+    const step = res.data;
+    return adaptStep(step, step.interview_id, step.qa_history?.length ?? 0);
+  },
+
+  async resumeInterview(): Promise<InterviewStartResponse> {
+    const res = await apiClient.post<{ success: boolean; data: BackendInterviewStep }>(
+      "/api/v1/ai/interview/resume"
+    );
+    const step = res.data;
+    return adaptStep(step, step.interview_id, step.qa_history?.length ?? 0);
+  },
+
+  async stopInterview(): Promise<InterviewStartResponse> {
+    const res = await apiClient.post<{ success: boolean; data: BackendInterviewStep }>(
+      "/api/v1/ai/interview/stop"
+    );
+    const step = res.data;
+    return adaptStep(step, step.interview_id, step.qa_history?.length ?? 0);
+  },
+
+  async restartInterview(): Promise<InterviewStartResponse> {
+    const res = await apiClient.post<{ success: boolean; data: BackendInterviewStep }>(
+      "/api/v1/ai/interview/restart",
+      { confirm: true }
+    );
+    const step = res.data;
+    return adaptStep(step, step.interview_id, 0);
   },
 
   async completeInterview(session_id: string): Promise<InterviewCompleteResponse> {
@@ -803,17 +838,21 @@ export const aiModulesService = {
         question: q.question,
         answer: q.answer ?? "",
         category: q.category ?? "General",
+        acknowledged: q.acknowledged,
+        rationale: q.rationale,
       }));
       const answered = qa.length;
-      const progress = detail.status === "completed" ? 100 : Math.min(95, Math.round((answered / 10) * 100));
+      const progress = detail.progress_percentage ?? (["completed", "knowledge_generated", "all_modules_updated"].includes(detail.status) ? 100 : Math.min(95, Math.round((answered / 10) * 100)));
       return {
         session_id: detail.id,
         startup_id: detail.startup_id,
-        status: detail.status as "not_started" | "in_progress" | "completed",
-        current_question_number: answered + 1,
+        status: detail.status as any,
+        current_question_number: detail.current_question_number || answered + 1,
         total_questions: 10,
         progress_percentage: progress,
         qa_history: qa,
+        extracted_knowledge: detail.extracted_knowledge,
+        knowledge_base: detail.knowledge_base,
         summary: detail.summary,
         key_insights: [],
       };

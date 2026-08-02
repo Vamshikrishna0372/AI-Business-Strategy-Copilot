@@ -107,6 +107,60 @@ async def test_get_interview_details(async_client: AsyncClient):
     assert res.json()["data"]["startup_id"] == startup_id
 
 
+@pytest.mark.asyncio
+async def test_interview_pause_and_resume(async_client: AsyncClient):
+    """Test pausing and resuming an active AI interview session."""
+    headers, startup_id = await _get_auth_and_startup(async_client)
+    await async_client.post("/api/v1/ai/interview/start", headers=headers, json={})
+
+    # Pause
+    pause_res = await async_client.post("/api/v1/ai/interview/pause", headers=headers, json={})
+    assert pause_res.status_code == 200
+    assert pause_res.json()["data"]["status"] == "paused"
+
+    # Resume
+    resume_res = await async_client.post("/api/v1/ai/interview/resume", headers=headers, json={})
+    assert resume_res.status_code == 200
+    assert resume_res.json()["data"]["status"] in ["started", "in_progress", "resumed"]
+
+
+@pytest.mark.asyncio
+async def test_interview_stop_and_restart(async_client: AsyncClient):
+    """Test stopping and restarting an interview session cleanly."""
+    headers, startup_id = await _get_auth_and_startup(async_client)
+    start_res = await async_client.post("/api/v1/ai/interview/start", headers=headers, json={})
+    q_id = start_res.json()["data"]["next_question_id"]
+    q_text = start_res.json()["data"]["next_question"]
+
+    # Submit answer
+    await async_client.post(
+        "/api/v1/ai/interview/answer",
+        headers=headers,
+        json={"question_id": q_id, "question": q_text, "answer": "We focus on enterprise AI strategy automation.", "category": "General"},
+    )
+
+    # Stop
+    stop_res = await async_client.post("/api/v1/ai/interview/stop", headers=headers, json={})
+    assert stop_res.status_code == 200
+
+    # Restart
+    restart_res = await async_client.post("/api/v1/ai/interview/restart", headers=headers, json={"confirm": True})
+    assert restart_res.status_code == 200
+    assert restart_res.json()["data"]["current_question_number"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_business_knowledge(async_client: AsyncClient):
+    """Test fetching structured Business Knowledge Base from interview."""
+    headers, startup_id = await _get_auth_and_startup(async_client)
+    await async_client.post("/api/v1/ai/interview/start", headers=headers, json={})
+
+    res = await async_client.get(f"/api/v1/ai/interview/{startup_id}/knowledge", headers=headers)
+    assert res.status_code == 200
+    assert "knowledge" in res.json()["data"]
+
+
+
 # --- MODULE 2: IDEA VALIDATION ---
 
 @pytest.mark.asyncio
