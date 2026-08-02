@@ -187,7 +187,7 @@ function isMobileBrowser(): boolean {
 
 // ─── Auth page ─────────────────────────────────────────────────────────────────
 function AuthPage() {
-  const { loginWithEmail, loginWithGoogle, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, loginWithEmail, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail]         = useState("");
@@ -199,6 +199,13 @@ function AuthPage() {
 
   // Track whether we are processing a redirect-return token
   const redirectHandled = useRef(false);
+
+  // ── Auto-redirect if already authenticated ──
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
 
   // ── On mount: check if we are returning from a Google redirect flow ──
   // Google implicit redirect returns access_token in the URL hash: #access_token=...

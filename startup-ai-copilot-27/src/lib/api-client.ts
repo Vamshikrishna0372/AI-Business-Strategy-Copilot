@@ -25,21 +25,49 @@ export class ApiError extends Error {
 
 export function getStoredToken(): string | null {
   try {
-    return localStorage.getItem("copilot.auth_token");
+    const fromLocal = localStorage.getItem("copilot.auth_token");
+    if (fromLocal) return fromLocal;
   } catch {
-    return null;
+    /* storage unavailable */
   }
+
+  try {
+    const fromSession = sessionStorage.getItem("copilot.auth_token");
+    if (fromSession) return fromSession;
+  } catch {
+    /* storage unavailable */
+  }
+
+  try {
+    if (typeof document !== "undefined") {
+      const match = document.cookie.match(/(?:^|; )copilot\.auth_token=([^;]*)/);
+      if (match && match[1]) return decodeURIComponent(match[1]);
+    }
+  } catch {
+    /* cookie unavailable */
+  }
+
+  return null;
 }
 
 export function setStoredToken(token: string | null): void {
-  try {
-    if (token) {
-      localStorage.setItem("copilot.auth_token", token);
-    } else {
-      localStorage.removeItem("copilot.auth_token");
-    }
-  } catch {
-    /* storage unavailable */
+  const maxAge = 60 * 60 * 24 * 30; // 30 days
+  if (token) {
+    try { localStorage.setItem("copilot.auth_token", token); } catch {}
+    try { sessionStorage.setItem("copilot.auth_token", token); } catch {}
+    try {
+      if (typeof document !== "undefined") {
+        document.cookie = `copilot.auth_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
+      }
+    } catch {}
+  } else {
+    try { localStorage.removeItem("copilot.auth_token"); } catch {}
+    try { sessionStorage.removeItem("copilot.auth_token"); } catch {}
+    try {
+      if (typeof document !== "undefined") {
+        document.cookie = "copilot.auth_token=; path=/; max-age=0; SameSite=Lax; Secure";
+      }
+    } catch {}
   }
 }
 
