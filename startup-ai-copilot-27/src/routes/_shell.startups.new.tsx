@@ -93,7 +93,7 @@ function CreateStartup() {
       />
 
       <SurfaceCard hover={false}>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {steps.map((s, i) => (
             <div key={s} className="min-w-0">
               <div className="flex items-center gap-2">

@@ -119,10 +119,10 @@ function Risk() {
               <SurfaceCard hover={false}>
                 <h2 className="text-base font-semibold">Risk heatmap</h2>
                 <p className="mt-1 text-sm text-muted-foreground">Probability increases upward; colour intensity shows severity.</p>
-                <div className="mt-5 overflow-x-auto">
+                <div className="mt-5 w-full max-w-full overflow-x-auto pb-2">
                   <div
-                    className="grid gap-2 min-w-[560px]"
-                    style={{ gridTemplateColumns: `90px repeat(${categories.length}, 1fr)` }}
+                    className="grid gap-2 min-w-[480px] sm:min-w-full"
+                    style={{ gridTemplateColumns: `75px repeat(${categories.length}, minmax(70px, 1fr))` }}
                   >
                     <div />
                     {categories.map((h) => (

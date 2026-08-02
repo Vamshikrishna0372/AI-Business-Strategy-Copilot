@@ -329,33 +329,25 @@ function AuthPage() {
     ux_mode: "popup",
   });
 
-  const handleGoogleLoginRedirect = useGoogleLogin({
-    flow: "implicit",
-    ux_mode: "redirect",
-    // After Google auth completes, it redirects back to this page with the token in the hash
-    redirect_uri: typeof window !== "undefined" ? `${window.location.origin}/auth` : undefined,
-
-    onSuccess: () => {
-      // This fires on non-redirect flows — not used in mobile path
-    },
-    onError: (err) => {
-      setGoogleLoading(false);
-      const desc = (err as any)?.error_description || (err as any)?.error || "";
-      if (!desc.includes("access_denied")) {
-        setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
-      }
-    },
-  });
-
   const triggerGoogleLogin = () => {
     setErrorMessage(null);
     setGoogleLoading(true);
     if (mobile) {
-      // On mobile: use redirect flow — page will reload with token in hash
-      handleGoogleLoginRedirect();
+      // On Android/mobile: direct native top-level OAuth redirect (GIS initTokenClient JS popup fails on Android Chrome)
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "729000417397-bi71cdt1hql1isaa37rkcg9j9df99fqe.apps.googleusercontent.com";
+      const redirectUri = typeof window !== "undefined" ? `${window.location.origin}/auth` : "https://ai-business-strategy-copilot.vercel.app/auth";
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "token",
+        scope: "openid email profile",
+        include_granted_scopes: "true",
+        prompt: "select_account",
+      });
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     } else {
-      // On desktop: use popup flow — onSuccess fires in same tab
-      setGoogleLoading(false); // popup sets its own loading state via onSuccess
+      // On desktop: popup flow — onSuccess fires in same tab
+      setGoogleLoading(false);
       handleGoogleLoginPopup();
     }
   };
