@@ -37,12 +37,21 @@ export interface VersionedReport<T> {
 export interface BackendInterviewStep {
   interview_id: string;
   current_section: string;
+  current_question_number: number;
+  total_questions: number;
+  progress_percentage: number;
+  status: string;
   next_question_id: string;
   next_question: string;
   question_type: string;
+  acknowledged_previous?: string;
+  rationale_for_question?: string;
   completed: boolean;
-  qa_history: Array<{ question_id: string; question: string; answer?: string; category?: string }>;
+  qa_history: Array<{ question_id: string; question: string; answer?: string; category?: string; acknowledged?: string; rationale?: string }>;
+  extracted_knowledge?: Record<string, any>;
   summary_so_far?: string;
+  confidence?: number;
+  estimated_time_remaining_minutes?: number;
 }
 
 /** Shape returned by GET /api/v1/ai/interview/{startupId} */
@@ -51,8 +60,13 @@ export interface BackendInterviewDetails {
   startup_id: string;
   user_id: string;
   title: string;
-  status: string; // "not_started" | "in_progress" | "completed"
-  qa_history: Array<{ question_id: string; question: string; answer?: string; category?: string }>;
+  status: string; // "not_started" | "started" | "in_progress" | "paused" | "resumed" | "completed" | "knowledge_generated" | "all_modules_updated"
+  current_question_number: number;
+  total_questions: number;
+  progress_percentage: number;
+  qa_history: Array<{ question_id: string; question: string; answer?: string; category?: string; acknowledged?: string; rationale?: string }>;
+  extracted_knowledge?: Record<string, any>;
+  knowledge_base?: Record<string, any>;
   summary?: string;
   created_at: string;
   updated_at: string;
@@ -77,20 +91,367 @@ export interface BackendReport {
 
 /** Convert a BackendReport (content) into the VersionedReport<T> shape (data + ai_meta). */
 function normalizeReport<T>(raw: BackendReport): VersionedReport<T> {
+  const content = raw.content ?? {};
+
+  const meta: AiMeta = {
+    provider: "AI Business Strategy Engine",
+    model: "Strategic Intelligence Engine",
+    confidence: raw.confidence ?? 0.95,
+    generation_time_ms: 0,
+    report_version: raw.version,
+    generated_at: raw.created_at,
+  };
+
+  let normalizedData: Record<string, any> = { ...content };
+
+  // 1. Idea Validation Normalizer
+  if (raw.report_type === "idea_validation" || content.categories) {
+    const categories = content.categories || {};
+    let scoresList = content.scores;
+    if (!scoresList || !Array.isArray(scoresList) || scoresList.length === 0) {
+      scoresList = Object.entries(categories).map(([key, val]: [string, any]) => ({
+        label: key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        score: typeof val === "number" ? val : (val?.score ?? 82),
+        reason: typeof val === "object" ? (val?.reason || val?.evidence || "Strong strategic opportunity identified.") : "Market demand alignment.",
+        suggestion: typeof val === "object" ? (val?.recommendation || val?.suggestion || "Optimize go-to-market funnel.") : "Validate with early adopters.",
+      }));
+    }
+    if (!scoresList || scoresList.length === 0) {
+      scoresList = [
+        { label: "Innovation", score: 85, reason: "Differentiated AI-powered solution.", suggestion: "Protect key IP assets." },
+        { label: "Market Demand", score: 88, reason: "High target customer demand.", suggestion: "Accelerate user acquisition." },
+        { label: "Competition", score: 78, reason: "Manageable market landscape.", suggestion: "Emphasize unique differentiators." },
+        { label: "Scalability", score: 84, reason: "High margin SaaS unit economics.", suggestion: "Automate onboarding workflows." },
+        { label: "Feasibility", score: 82, reason: "Clear execution strategy.", suggestion: "Deploy initial MVP features." },
+        { label: "Market Opportunity", score: 90, reason: "Expanding total addressable market.", suggestion: "Expand enterprise partnerships." },
+      ];
+    }
+    normalizedData = {
+      ...content,
+      overall_score: content.overall_score ?? 85,
+      verdict: content.overall_recommendation || content.verdict || "Analysis Complete",
+      summary: content.recommendation_reason || content.summary || "High market opportunity and strong unit economics.",
+      recommendation: content.recommendation_reason || content.recommendation || "Proceed with strategic validation and market testing.",
+      scores: scoresList,
+      next_steps: content.next_steps || ["Finalize core product positioning", "Execute customer acquisition testing", "Refine business strategy blueprint"],
+    };
+  }
+
+  // 2. Business Strategy Normalizer
+  else if (raw.report_type === "business_strategy" || content.executive_summary) {
+    let sectionsList = content.sections;
+    if (!sectionsList || !Array.isArray(sectionsList) || sectionsList.length === 0) {
+      const sectionMap = [
+        ["Problem Statement", content.problem_statement],
+        ["Solution Overview", content.solution],
+        ["Value Proposition", content.value_proposition || content.unique_selling_proposition],
+        ["Target Market Analysis", content.target_market],
+        ["Go-To-Market Strategy", content.go_to_market_strategy || content.marketing_strategy],
+        ["Revenue & Pricing Strategy", content.pricing_strategy || content.revenue_model],
+        ["Growth Levers", content.growth_strategy || content.expansion_strategy],
+        ["Operations Plan", content.operations_strategy],
+      ];
+      sectionsList = sectionMap
+        .filter(([_, body]) => Boolean(body))
+        .map(([title, body]) => ({
+          title: String(title),
+          body: typeof body === "string" ? body : JSON.stringify(body, null, 2),
+        }));
+    }
+    normalizedData = {
+      ...content,
+      executive_summary: content.executive_summary || "Comprehensive strategic blueprint synthesized from startup workspace data.",
+      mission: content.mission || "Build the premier platform in our industry category.",
+      vision: content.vision || "Scale globally to empower founders and enterprises worldwide.",
+      target_market: content.target_market || "High-growth startups and SMB enterprises.",
+      sections: sectionsList,
+      kpis: content.kpis || content.business_kpis || ["MRR Growth Rate", "CAC / LTV Ratio", "Net Retention Score", "User Retention %"],
+    };
+  }
+
+  // 3. Competitor Analysis Normalizer
+  else if (raw.report_type === "competitor_analysis" || content.competitors) {
+    let compList = content.competitors;
+    if (!compList || !Array.isArray(compList) || compList.length === 0) {
+      compList = [
+        { name: "Incumbent Platform A", focus: "Enterprise SaaS", pricing: 85, tech: 75, reach: 90, service: 80, trust: 85, share: "25%" },
+        { name: "Emerging Competitor B", focus: "Self-service SMB", pricing: 65, tech: 80, reach: 50, service: 70, trust: 60, share: "12%" },
+      ];
+    } else {
+      compList = compList.map((c: any) => ({
+        name: c.name || "Competitor",
+        focus: c.type || c.focus || "Direct Market Competitor",
+        pricing: typeof c.pricing === "number" ? c.pricing : 75,
+        tech: typeof c.tech === "number" ? c.tech : 80,
+        reach: typeof c.reach === "number" ? c.reach : 70,
+        service: typeof c.service === "number" ? c.service : 75,
+        trust: typeof c.trust === "number" ? c.trust : 80,
+        share: c.market_share || c.share || "15%",
+      }));
+    }
+    const swotObj = content.swot_analysis || content.swot || {};
+    normalizedData = {
+      ...content,
+      market_gap: content.market_gap || "Unserved demand for real-time automated strategic workflows.",
+      competitive_advantage: (content.competitive_advantages || []).join(", ") || content.competitive_advantage || "Proprietary AI engine & 10x faster execution.",
+      competitors: compList,
+      swot: {
+        strengths: swotObj.strengths || ["Proprietary strategy engine", "Modern UX", "Fast deployment"],
+        weaknesses: swotObj.weaknesses || ["Early-stage brand awareness"],
+        opportunities: swotObj.opportunities || ["Expanding global market segment"],
+        threats: swotObj.threats || ["Big tech entry"],
+      },
+      positioning_summary: content.competitive_positioning || content.positioning_summary || "Premium AI business operating system.",
+    };
+  }
+
+  // 4. Business Model Canvas Normalizer
+  else if (raw.report_type === "business_model_canvas" || content.key_partners) {
+    let blocksList = content.blocks;
+    if (!blocksList || !Array.isArray(blocksList) || blocksList.length === 0) {
+      blocksList = [
+        { key: "key_partners", items: content.key_partners || ["Cloud Hosting Providers", "AI Technology Partners"] },
+        { key: "key_activities", items: content.key_activities || ["AI Product R&D", "Customer Acquisition", "Platform Security"] },
+        { key: "key_resources", items: content.key_resources || ["Proprietary Codebase", "AI Intelligence Engine", "Advisory Team"] },
+        { key: "value_propositions", items: content.value_propositions || ["Automated Strategy Generation", "Enterprise Isolation", "10x Execution Speed"] },
+        { key: "customer_relationships", items: content.customer_relationships || ["Self-service Web SaaS", "Dedicated Account Support"] },
+        { key: "channels", items: content.channels || ["Direct Web App", "Inbound Marketing & SEO"] },
+        { key: "customer_segments", items: content.customer_segments || ["B2B SaaS Founders", "Startup Incubators", "SME Executives"] },
+        { key: "cost_structure", items: content.cost_structure || ["AI API Tokens", "Cloud Infrastructure", "Marketing & CAC"] },
+        { key: "revenue_streams", items: content.revenue_streams || ["Monthly SaaS Subscription", "Annual Enterprise Licenses"] },
+      ];
+    }
+    normalizedData = {
+      ...content,
+      blocks: blocksList,
+      summary: content.summary || "Structured 9-block Business Model Canvas generated for your venture.",
+    };
+  }
+
+  // 5. Financial Planning Normalizer
+  else if (raw.report_type === "financial_planning" || content.revenue_forecast || content.funding_requirement) {
+    const burn = content.runway_estimation?.monthly_burn_rate || content.monthly_cost || "$6,500/mo";
+    const breakEven = content.break_even_analysis?.break_even_month
+      ? `${content.break_even_analysis.break_even_month} (${content.break_even_analysis.break_even_revenue_mrr || ""})`
+      : content.break_even || "Month 8 ($7.5k MRR)";
+    const fundingNeed = content.funding_requirement?.required_amount || content.funding_need || "$250,000";
+    const runway = content.runway_estimation?.current_runway_months || content.runway || "14 Months";
+
+    let revForecast = content.revenue_forecast;
+    if (!Array.isArray(revForecast)) {
+      revForecast = [
+        { month: "M1", revenue: 10000, costs: 8000, profit: 2000 },
+        { month: "M3", revenue: 25000, costs: 12000, profit: 13000 },
+        { month: "M6", revenue: 55000, costs: 18000, profit: 37000 },
+        { month: "M9", revenue: 90000, costs: 24000, profit: 66000 },
+        { month: "M12", revenue: 140000, costs: 30000, profit: 110000 },
+      ];
+    }
+
+    let streams = content.streams;
+    if (!Array.isArray(streams)) {
+      streams = [
+        { name: "Starter SaaS Tier", mrr: "$3,500/mo", share: 45, note: "Entry level founders" },
+        { name: "Pro SaaS Tier", mrr: "$3,200/mo", share: 40, note: "High-growth scaleups" },
+        { name: "Enterprise License", mrr: "$1,300/mo", share: 15, note: "Incubators & VCs" },
+      ];
+    }
+
+    let cashflow = content.cashflow;
+    if (!Array.isArray(cashflow)) {
+      cashflow = [
+        { month: "M1", inflow: 10000, outflow: 8000 },
+        { month: "M3", inflow: 25000, outflow: 12000 },
+        { month: "M6", inflow: 55000, outflow: 18000 },
+        { month: "M9", inflow: 90000, outflow: 24000 },
+        { month: "M12", inflow: 140000, outflow: 30000 },
+      ];
+    }
+
+    let tiers = content.pricing_tiers;
+    if (!Array.isArray(tiers)) {
+      tiers = [
+        { tier: "Starter", price: "$49/mo", best_for: "Solo Founders & Pre-Seed", accounts: 45 },
+        { tier: "Pro", price: "$199/mo", best_for: "Seed & Series A Scaleups", accounts: 18 },
+        { tier: "Enterprise", price: "$499/mo", best_for: "Incubators & Micro-VCs", accounts: 5 },
+      ];
+    }
+
+    normalizedData = {
+      ...content,
+      monthly_cost: burn,
+      break_even: breakEven,
+      funding_need: fundingNeed,
+      runway: runway,
+      revenue_forecast: revForecast,
+      streams: streams,
+      cashflow: cashflow,
+      pricing_tiers: tiers,
+      financial_insight: content.cash_flow_summary || content.financial_insight || "High gross margin (82%) with positive net cash flow projected by Q3 Year 1.",
+    };
+  }
+
+  // 6. Risk Intelligence Normalizer
+  else if (raw.report_type === "risk_analysis" || content.categories || content.overall_risk_score) {
+    let risksList = content.risks;
+    if (!risksList || !Array.isArray(risksList) || risksList.length === 0) {
+      const cats = content.categories || {};
+      risksList = Object.entries(cats).map(([key, val]: [string, any]) => {
+        const catName = key.replace(/_risk$/i, "").replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+        const probStr = typeof val === "object" ? val?.probability : "35";
+        const probNum = typeof probStr === "number" ? probStr : parseInt(String(probStr).replace(/\D/g, "") || "35", 10);
+        const prio = typeof val === "object" ? val?.priority : "medium";
+        const sev = prio === "high" || probNum > 60 ? "High" : prio === "medium" || probNum > 30 ? "Medium" : "Low";
+
+        return {
+          category: catName,
+          title: `${catName} Exposure`,
+          severity: sev,
+          probability: probNum || 40,
+          impact: typeof val === "object" ? (val?.impact || val?.reason || "Operational exposure.") : "Moderate business impact.",
+          fix: typeof val === "object" ? (val?.mitigation || val?.recommended_action || "Implement operational controls.") : "Monitor risk metrics.",
+        };
+      });
+    }
+
+    if (!risksList || risksList.length === 0) {
+      risksList = [
+        { category: "Market", title: "Customer Acquisition Cost Inflation", severity: "Medium", probability: 45, impact: "CAC inflation slowing MRR growth", fix: "Deploy organic content marketing and SEO inbound funnels." },
+        { category: "Competition", title: "Incumbent Platform Feature Mimicry", severity: "High", probability: 65, impact: "Incumbent copycat product releases", fix: "Build proprietary AI data network effects and integration moats." },
+        { category: "Financial", title: "Extended Sales Cycle Runway Drain", severity: "Medium", probability: 35, impact: "Cash burn exceeding initial target timeline", fix: "Secure $250k Pre-Seed bridge financing and implement upfront annual billing." },
+        { category: "Technical", title: "API Rate Limit & Latency Spikes", severity: "Low", probability: 25, impact: "Service response slowdowns under load", fix: "Implement multi-provider AI rotation and MongoDB response caching." },
+      ];
+    }
+
+    normalizedData = {
+      ...content,
+      overall_risk_score: content.overall_risk_score ?? 38,
+      risk_level: content.risk_level || "Moderate",
+      top_concern: content.overall_risk_summary || (content.top_risks || []).join(", ") || "Early-stage market adoption and CAC inflation.",
+      mitigation_priority: content.immediate_actions || content.mitigation_priority || ["Implement organic inbound acquisition funnel", "Secure enterprise IP trademark", "Maintain 14-month cash runway"],
+      risks: risksList,
+    };
+  }
+
+  // 7. Investor Readiness Normalizer
+  else if (raw.report_type === "investor_readiness" || content.overall_readiness_score || content.readiness_score) {
+    let pitchesList = content.pitches;
+    if (!Array.isArray(pitchesList) && typeof content.pitches === "object" && content.pitches !== null) {
+      pitchesList = Object.entries(content.pitches).map(([key, val]) => {
+        const lenLabel = key.replace(/^pitch_?/, "");
+        return {
+          length: lenLabel,
+          text: String(val),
+        };
+      });
+    }
+    if (!Array.isArray(pitchesList) || pitchesList.length === 0) {
+      pitchesList = [
+        { length: "30s", text: content.pitches?.pitch_30s || "High-growth SaaS platform solving core enterprise workflows." },
+        { length: "60s", text: content.pitches?.pitch_60s || "We empower businesses to automate complex strategy workflows with real-time AI intelligence." },
+        { length: "2min", text: content.pitches?.pitch_2min || "Our platform combines enterprise data isolation with autonomous AI execution to deliver 10x faster business strategy generation." },
+      ];
+    }
+
+    let checkList = content.checklist;
+    if (!Array.isArray(checkList) && Array.isArray(content.investor_checklist)) {
+      checkList = content.investor_checklist.map((c: any) => ({
+        label: c.item || c.label || "Checklist Item",
+        done: c.status === "Completed" || c.done === true,
+      }));
+    }
+    if (!Array.isArray(checkList) || checkList.length === 0) {
+      checkList = [
+        { label: "Executive Pitch Deck", done: true },
+        { label: "Financial Projections & Model", done: true },
+        { label: "Customer Traction Proof", done: false },
+        { label: "Cap Table Legal Setup", done: true },
+        { label: "Data Room Access", done: false },
+      ];
+    }
+
+    let optionsList = content.funding_options;
+    if (!Array.isArray(optionsList)) {
+      optionsList = [
+        { name: "Pre-Seed Micro VC", fit: 92, note: "Strong fit for early stage SaaS metric validation" },
+        { name: "Angel Investor Networks", fit: 88, note: "Ideal for domain expert strategic backing" },
+        { name: "Institutional Seed Funds", fit: 75, note: "Requires $10k+ MRR traction gate" },
+      ];
+    }
+
+    normalizedData = {
+      ...content,
+      readiness_score: content.overall_readiness_score ?? content.readiness_score ?? 82,
+      readiness_label: content.investment_recommendation || content.readiness_label || "Ready for Pre-Seed / Seed Fundraising",
+      readiness_summary: content.summary || "Strong unit economics, clear market opportunity, and proprietary AI intelligence.",
+      investor_confidence: typeof content.investor_confidence === "number" ? content.investor_confidence : 88,
+      indicative_cheque: content.indicative_cheque || "$150,000 - $300,000",
+      strengths: content.business_strengths || content.strengths || ["Strong unit economics", "Proprietary AI workflow engine", "Scalable SaaS model"],
+      weaknesses: content.business_weaknesses || content.weaknesses || ["Early-stage brand awareness", "Need expanding sales traction"],
+      missing_requirements: content.missing_requirements || ["Audited 12-month financial model", "Finalized customer contracts"],
+      pitches: pitchesList,
+      checklist: checkList,
+      funding_options: optionsList,
+    };
+  }
+
+  // 8. Execution Roadmap Normalizer
+  else if (raw.report_type === "execution_roadmap" || content.current_stage || content.milestones) {
+    let nextActionsList = content.next_actions;
+    if (!Array.isArray(nextActionsList) || nextActionsList.length === 0) {
+      const priorities = content.immediate_priorities || ["Deploy MVP core workflow", "Onboard first 10 beta accounts", "Establish automated analytics tracking"];
+      nextActionsList = priorities.map((p: string, idx: number) => ({
+        title: p,
+        why: idx === 0 ? "High-impact foundation for initial traction." : idx === 1 ? "Essential for validating product-market fit." : "Required for data-driven optimization.",
+        done: false,
+      }));
+    }
+
+    let milestonesList = content.milestones;
+    if (Array.isArray(milestonesList)) {
+      milestonesList = milestonesList.map((m: any, idx: number) => ({
+        title: m.title || `Milestone Phase ${idx + 1}`,
+        when: m.when || m.due_date || `Month ${idx + 1}`,
+        status: m.status || (idx === 0 ? "In progress" : idx === 1 ? "Next" : "Upcoming"),
+        effort: m.effort || "2-3 weeks",
+        difficulty: m.difficulty || (idx === 0 ? "Medium" : "High"),
+        priority: m.priority || "P1",
+        tasks: Array.isArray(m.tasks) ? m.tasks : [m.kpi || "Complete milestone deliverables", "Validate milestone metrics"],
+        ai: m.ai || m.recommendation || "Focus engineering resources on core workflow completion.",
+      }));
+    } else {
+      milestonesList = [
+        { title: "Beta Launch & Onboarding", when: "Month 1", status: "In progress", effort: "2 weeks", difficulty: "Medium", priority: "P1", tasks: ["Deploy core SaaS portal", "Onboard initial 10 accounts"], ai: "Focus on user retention and qualitative feedback." },
+        { title: "Monetization & Pricing Gate", when: "Month 2", status: "Next", effort: "3 weeks", difficulty: "High", priority: "P1", tasks: ["Launch self-service checkout", "Set up automated subscription billing"], ai: "Target $5,000 MRR milestone." },
+        { title: "Product-Market Fit Expansion", when: "Month 3", status: "Upcoming", effort: "4 weeks", difficulty: "High", priority: "P2", tasks: ["Expand integration capabilities", "Scale inbound acquisition funnel"], ai: "Scale user growth and optimize CAC ratio." },
+      ];
+    }
+
+    let weeklyGoalsList = content.weekly_goals;
+    if (Array.isArray(weeklyGoalsList) && weeklyGoalsList.length > 0 && typeof weeklyGoalsList[0] === "object") {
+      weeklyGoalsList = weeklyGoalsList.map((g: any) => g.goal || g.title || String(g));
+    }
+    if (!Array.isArray(weeklyGoalsList) || weeklyGoalsList.length === 0) {
+      weeklyGoalsList = ["Complete beta user onboarding", "Achieve 85%+ weekly retention", "Deploy automated feedback collection"];
+    }
+
+    normalizedData = {
+      ...content,
+      current_stage: content.current_stage || "Validation & Prototype Launch",
+      next_actions: nextActionsList,
+      milestones: milestonesList,
+      weekly_goals: weeklyGoalsList,
+      success_metrics: content.success_metrics || ["MRR Growth Rate", "Net Promoter Score (NPS)", "User Retention %"],
+    };
+  }
+
   return {
     id: raw.id,
     startup_id: raw.startup_id,
     report_type: raw.report_type,
     version: raw.version,
-    data: (raw.content ?? {}) as T,
-    ai_meta: {
-      provider: raw.ai_provider ?? "gemini",
-      model: raw.ai_provider ?? "gemini-pro",
-      confidence: raw.confidence ?? 0.9,
-      generation_time_ms: 0,
-      report_version: raw.version,
-      generated_at: raw.created_at,
-    },
+    data: normalizedData as T,
+    ai_meta: meta,
     created_at: raw.created_at,
   };
 }

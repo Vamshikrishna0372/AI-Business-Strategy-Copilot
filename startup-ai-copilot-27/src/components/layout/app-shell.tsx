@@ -149,13 +149,14 @@ function AppSidebar() {
         <SidebarGroup>
           {!collapsed && (
             <SidebarGroupLabel className="truncate">
-              Current Startup · {activeStartup.name}
+              Current Startup · {activeStartup?.name ?? "None selected"}
             </SidebarGroupLabel>
           )}
           <SidebarGroupContent>
             <SidebarMenu>
               {currentStartupItems.slice(0, 1).map(item)}
 
+              {workspace && (
               <Collapsible defaultOpen={journeyOpen} className="group/journey">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -195,6 +196,7 @@ function AppSidebar() {
                   )}
                 </SidebarMenuItem>
               </Collapsible>
+              )}
 
               {currentStartupItems.slice(1).map(item)}
             </SidebarMenu>
@@ -247,28 +249,28 @@ function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
           ))}
         </CommandGroup>
         <CommandGroup heading="Business modules">
-          {workspace.modules.map((m) => (
+          {workspace?.modules.map((m) => (
             <CommandItem key={m.key} value={m.title} onSelect={() => go(m.route)}>
               {m.title} <span className="ml-2 text-xs text-muted-foreground">{m.status}</span>
             </CommandItem>
           ))}
         </CommandGroup>
         <CommandGroup heading="Reports">
-          {workspace.reports.map((r) => (
+          {workspace?.reports.map((r) => (
             <CommandItem key={r.key} value={`${r.name} report`} onSelect={() => go("/reports")}>
               {r.name} <span className="ml-2 text-xs text-muted-foreground">{r.status}</span>
             </CommandItem>
           ))}
         </CommandGroup>
         <CommandGroup heading="AI conversations">
-          {workspace.conversations.map((c) => (
+          {workspace?.conversations.map((c) => (
             <CommandItem key={c.id} value={c.title} onSelect={() => go("/copilot")}>
               {c.title} <span className="ml-2 text-xs text-muted-foreground">{c.updated}</span>
             </CommandItem>
           ))}
         </CommandGroup>
         <CommandGroup heading="Recent activity">
-          {workspace.activities.map((a) => (
+          {workspace?.activities.map((a) => (
             <CommandItem key={a.text} value={a.text} onSelect={() => go("/overview")}>
               {a.text} <span className="ml-2 text-xs text-muted-foreground">{a.time}</span>
             </CommandItem>

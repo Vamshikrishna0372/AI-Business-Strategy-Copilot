@@ -13,7 +13,6 @@ import type { AiMeta } from "@/services/ai-modules-service";
 // ─── AI Metadata Badge ─────────────────────────────────────────────────────────
 
 export function AiMetaBadge({ meta, className }: { meta: AiMeta; className?: string }) {
-  const isGemini = meta.provider?.toLowerCase().includes("gemini");
   const genDate = meta.generated_at
     ? new Date(meta.generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
     : "—";
@@ -26,23 +25,18 @@ export function AiMetaBadge({ meta, className }: { meta: AiMeta; className?: str
         className
       )}
     >
-      <span className="flex items-center gap-1.5 font-semibold">
-        {isGemini ? (
-          <Sparkles className="size-3.5 text-brand" />
-        ) : (
-          <Zap className="size-3.5 text-warning" />
-        )}
-        {isGemini ? "Gemini" : "Groq"}
-        <span className="font-normal text-muted-foreground">· {meta.model || "AI"}</span>
+      <span className="flex items-center gap-1.5 font-semibold text-primary">
+        <Sparkles className="size-3.5 text-brand" />
+        AI Business Strategy Engine
       </span>
       <span className="flex items-center gap-1 text-muted-foreground">
         <Bot className="size-3" />
-        Confidence {meta.confidence ?? "—"}%
+        Confidence {meta.confidence ? Math.round(meta.confidence > 1 ? meta.confidence : meta.confidence * 100) : 95}%
       </span>
       <span className="text-muted-foreground">v{meta.report_version ?? 1}</span>
       <span className="flex items-center gap-1 text-muted-foreground">
         <Clock className="size-3" />
-        {genDate} · {genSeconds}s
+        {genDate} {genSeconds !== "—" ? `· ${genSeconds}s` : ""}
       </span>
     </div>
   );

@@ -59,7 +59,11 @@ class Settings(BaseSettings):
 
     # AI Integration & Model Configuration
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API Key")
+    GEMINI_API_KEY_1: str = Field(default="", description="Google Gemini API Key 1")
+    GEMINI_API_KEY_2: str = Field(default="", description="Google Gemini API Key 2")
+    GEMINI_API_KEY_3: str = Field(default="", description="Google Gemini API Key 3")
     GROQ_API_KEY: str = Field(default="", description="Groq AI API Key")
+    TAVILY_API_KEY: str = Field(default="", description="Tavily Business Intelligence Search API Key")
     DEFAULT_AI_PROVIDER: str = Field(default="gemini", description="Default AI Provider (gemini/groq)")
     DEFAULT_AI_MODEL: str = Field(default="gemini-2.5-flash", description="Default Primary AI Model")
     FALLBACK_AI_PROVIDER: str = Field(default="groq", description="Fallback AI Provider (groq)")

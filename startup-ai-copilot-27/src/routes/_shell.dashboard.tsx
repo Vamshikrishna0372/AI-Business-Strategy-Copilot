@@ -71,6 +71,7 @@ function Dashboard() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [scores, setScores] = useState<StartupScores | null>(null);
   const [timeline, setTimeline] = useState<any[]>([]);
+  const [interviewState, setInterviewState] = useState<"not_started" | "in_progress" | "completed">("not_started");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +91,13 @@ function Dashboard() {
 
       const timelineData = await dashboardService.getTimeline(activeStartup.id);
       setTimeline(timelineData);
+
+      try {
+        const intStatus = await aiModulesService.getInterviewStatus(activeStartup.id);
+        setInterviewState(intStatus.status);
+      } catch {
+        setInterviewState("not_started");
+      }
     } catch (err: any) {
       console.warn("Error loading dashboard metrics:", err);
       setError(err.message || "Failed to load dashboard data.");
@@ -211,16 +219,29 @@ function Dashboard() {
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-80">AI recommendation</p>
             <p className="mt-1 text-lg font-semibold">
-              {overview?.ai_recommendations?.[0]?.title || `Start the AI Business Interview for ${activeStartup?.name}`}
+              {interviewState === "completed"
+                ? `Review Business Strategy Blueprint for ${activeStartup?.name || "your startup"}`
+                : interviewState === "in_progress"
+                ? `Continue AI Business Interview for ${activeStartup?.name || "your startup"}`
+                : `Start AI Business Interview for ${activeStartup?.name || "your startup"}`}
             </p>
             <p className="mt-1 text-sm opacity-90">
-              {overview?.ai_recommendations?.[0]?.description ||
-                `Complete the AI Business Interview to unlock your full strategy, scores and investor readiness for ${activeStartup?.name}.`}
+              {interviewState === "completed"
+                ? "Your founder interview is complete. View your AI-generated executive strategy and financial forecasts."
+                : interviewState === "in_progress"
+                ? "You have active interview progress. Answer remaining questions to synthesize your strategy context."
+                : "Complete the AI Business Interview to unlock your full strategy, scores and investor readiness."}
             </p>
           </div>
           <Button variant="secondary" asChild>
-            <Link to="/interview">
-              Start Interview <ArrowRight />
+            <Link to={interviewState === "completed" ? "/strategy" : "/interview"}>
+              {interviewState === "completed" ? (
+                <>View Strategy <ArrowRight /></>
+              ) : interviewState === "in_progress" ? (
+                <>Continue Interview <ArrowRight /></>
+              ) : (
+                <>Start Interview <ArrowRight /></>
+              )}
             </Link>
           </Button>
         </div>

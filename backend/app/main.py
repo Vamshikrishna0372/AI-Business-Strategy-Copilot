@@ -28,8 +28,11 @@ async def lifespan(app: FastAPI):
     try:
         await db_manager.connect_to_database()
         await create_database_indexes()
+        from app.services.tavily_service import TavilyService
+        tavily = TavilyService()
+        await tavily.validate_key()
     except Exception as e:
-        logger.warning(f"Startup notice: Database connection pending or offline: {str(e)}")
+        logger.warning(f"Startup notice: Database or Tavily initialization pending: {str(e)}")
 
     yield
 

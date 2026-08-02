@@ -15,6 +15,15 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
 def _map_notification(doc: dict) -> NotificationResponse:
+    created_at_val = doc.get("created_at")
+    if not created_at_val:
+        obj_id = doc.get("_id")
+        if isinstance(obj_id, ObjectId):
+            created_at_val = obj_id.generation_time
+        else:
+            from datetime import datetime, timezone
+            created_at_val = datetime.now(timezone.utc)
+
     return NotificationResponse(
         id=str(doc.get("_id", "")),
         user_id=str(doc.get("user_id", "")),
@@ -23,7 +32,7 @@ def _map_notification(doc: dict) -> NotificationResponse:
         type=doc.get("type", "SYSTEM"),
         is_read=doc.get("is_read", False),
         link=doc.get("link"),
-        created_at=doc.get("created_at"),
+        created_at=created_at_val,
     )
 
 
@@ -41,7 +50,10 @@ async def list_notifications(
 ):
     """Lists notifications for the current authenticated user."""
     col = get_collection(CollectionName.NOTIFICATIONS)
-    query: dict = {"user_id": current_user.id}
+    user_id_str = str(current_user.id)
+    user_obj_id = ObjectId(user_id_str) if ObjectId.is_valid(user_id_str) else user_id_str
+
+    query: dict = {"user_id": {"$in": [user_obj_id, user_id_str]}}
     if unread_only:
         query["is_read"] = False
 

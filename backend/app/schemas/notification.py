@@ -15,4 +15,4 @@ class NotificationResponse(BaseSchema):
     type: NotificationType
     is_read: bool
     link: Optional[str] = Field(default=None)
-    created_at: datetime
+    created_at: Optional[datetime] = Field(default_factory=datetime.now)

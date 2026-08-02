@@ -34,7 +34,7 @@ const EMPTY_STARTUP: Startup = {
 type WorkspaceContextValue = {
   startups: Startup[];
   rawStartups: BackendStartup[];
-  activeStartup: Startup | null;
+  activeStartup: Startup; // Always non-null; EMPTY_STARTUP when no startup selected
   rawActiveStartup: BackendStartup | null;
   workspace: Workspace | null;
   activeId: string;
@@ -152,9 +152,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [rawStartups]
   );
 
-  const activeStartup: Startup | null = useMemo(() => {
-    if (uiStartups.length === 0) return null;
-    return uiStartups.find((s) => s.id === activeId) ?? uiStartups[0] ?? null;
+  const activeStartup: Startup = useMemo(() => {
+    if (uiStartups.length === 0) return EMPTY_STARTUP;
+    return uiStartups.find((s) => s.id === activeId) ?? uiStartups[0] ?? EMPTY_STARTUP;
   }, [uiStartups, activeId]);
 
   const rawActiveStartup: BackendStartup | null = useMemo(

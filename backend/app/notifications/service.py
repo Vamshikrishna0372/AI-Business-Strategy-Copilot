@@ -25,6 +25,7 @@ class NotificationService:
             if not ObjectId.is_valid(user_id_str):
                 return False
 
+            from datetime import datetime, timezone
             col = get_collection(CollectionName.NOTIFICATIONS)
             notif_doc = {
                 "user_id": ObjectId(user_id_str),
@@ -33,6 +34,7 @@ class NotificationService:
                 "type": notification_type.value if hasattr(notification_type, "value") else str(notification_type),
                 "is_read": False,
                 "link": link,
+                "created_at": datetime.now(timezone.utc),
             }
             await col.insert_one(notif_doc)
             logger.info(f"[Notification Created] User: {user_id_str} | Title: '{title}'")

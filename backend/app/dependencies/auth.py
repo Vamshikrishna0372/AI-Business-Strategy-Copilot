@@ -1,6 +1,7 @@
 """Authentication, User Context, Role & Active Startup FastAPI Dependencies."""
 
 from typing import List, Optional
+from bson import ObjectId
 from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.auth.jwt import JWTAuthHandler
@@ -54,14 +55,34 @@ async def get_current_active_startup(
     current_user: User = Depends(get_current_user),
 ) -> Startup:
     """FastAPI Dependency resolving current active Startup Workspace context."""
-    startup_id = x_startup_id or current_user.preferences.get("active_startup_id")
-    if not startup_id:
-        raise NotFoundException("No active startup workspace selected. Please specify X-Startup-ID or activate a startup.")
-
     startup_repo = StartupRepository(collection_name=CollectionName.STARTUPS.value)
-    startup = await startup_repo.get_by_owner_and_id(str(current_user.id), str(startup_id))
+    
+    # Sanitize literal string "null" / "undefined" / empty values from frontend
+    clean_id = x_startup_id
+    if clean_id in (None, "", "null", "undefined", "None"):
+        clean_id = current_user.preferences.get("active_startup_id")
+        if clean_id in (None, "", "null", "undefined", "None"):
+            clean_id = None
 
+    startup: Optional[Startup] = None
+    if clean_id and ObjectId.is_valid(clean_id):
+        startup = await startup_repo.get_by_owner_and_id(str(current_user.id), str(clean_id))
+
+    # Auto-fallback: Find first startup owned by user if specified ID was invalid or missing
     if not startup:
-        raise NotFoundException("Active startup workspace not found or access denied")
+        user_startups = await startup_repo.get_startups_by_owner(str(current_user.id))
+        if user_startups:
+            startup = user_startups[0]
+
+    # Failsafe: Return/create workspace context if user has no startups yet
+    if not startup:
+        startup = await startup_repo.create(
+            Startup(
+                name=f"{current_user.full_name}'s Startup",
+                owner_id=current_user.id,
+                industry="Technology & AI",
+                stage="seed",
+            )
+        )
 
     return startup

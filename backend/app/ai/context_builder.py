@@ -20,6 +20,7 @@ class ContextBuilder:
         reports_summary: Optional[List[Dict[str, Any]]] = None,
         recent_messages: Optional[List[Dict[str, Any]]] = None,
         current_module: str = "general",
+        live_intelligence: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Assembles isolated startup workspace context into a clean text block."""
         context_parts = []
@@ -61,7 +62,7 @@ class ContextBuilder:
             qa_list = interview_data.get("qa_history") or []
             if qa_list:
                 context_parts.append("Key Q&A Highlights:")
-                for idx, qa in enumerate(qa_list[:5], 1):
+                for idx, qa in enumerate(qa_list, 1):
                     q = qa.get("question", "")
                     a = qa.get("answer", "No answer provided")
                     context_parts.append(f"  Q{idx}: {q}\n  A{idx}: {a}")
@@ -74,18 +75,34 @@ class ContextBuilder:
                 rtype = r.get("report_type", "General")
                 context_parts.append(f"- [{rtype}] {title}")
 
-        # 5. Recent Conversation Memory Section
+        # 5. Real-Time Business Intelligence & Market Research Data Section
+        if live_intelligence and live_intelligence.get("results"):
+            context_parts.append("\n=== REAL-TIME BUSINESS INTELLIGENCE & MARKET RESEARCH ===")
+            query = live_intelligence.get("query", "")
+            answer = live_intelligence.get("answer", "")
+            if query:
+                context_parts.append(f"Research Query: {query}")
+            if answer:
+                context_parts.append(f"Executive Synthesis: {answer}")
+            context_parts.append("Live Web Intelligence Results:")
+            for idx, res in enumerate(live_intelligence.get("results", [])[:5], 1):
+                title = res.get("title", "")
+                snippet = res.get("content", "")
+                if len(snippet) > 250:
+                    snippet = snippet[:250] + "..."
+                context_parts.append(f"  {idx}. [{title}] {snippet}")
+
+        # 6. Recent Conversation Memory Section
         if recent_messages:
             context_parts.append("\n=== RECENT CONVERSATION HISTORY ===")
             for msg in recent_messages[-6:]:
                 sender = msg.get("sender", "user").capitalize()
                 content = msg.get("content", "")
-                # Truncate very long past messages to keep token usage efficient
                 if len(content) > 300:
                     content = content[:300] + "..."
                 context_parts.append(f"{sender}: {content}")
 
-        # 6. Current Active Strategy Module Tag
+        # 7. Current Active Strategy Module Tag
         context_parts.append(f"\n=== CURRENT ACTIVE MODULE: {current_module.upper()} ===")
 
         return "\n".join(context_parts)

@@ -32,7 +32,7 @@ class InterviewRepository(BaseRepository[Interview]):
         return await self.find_many(filter_dict={"startup_id": self._build_id_query(startup_id_str)})
 
     async def get_latest_interview(self, startup_id_str: str) -> Optional[Interview]:
-        """Gets the most recent interview for a startup."""
+        """Gets the single active interview for a startup."""
         if not ObjectId.is_valid(startup_id_str):
             return None
         cursor = (
@@ -45,6 +45,25 @@ class InterviewRepository(BaseRepository[Interview]):
             return self.model_class(**docs[0])
         return None
 
+    async def get_or_create_active_interview(
+        self, startup_id_str: str, user_id_str: str, title: Optional[str] = None
+    ) -> Interview:
+        """Gets existing interview or creates a single interview document per startup."""
+        existing = await self.get_latest_interview(startup_id_str)
+        if existing:
+            return existing
+
+        now = datetime.now(timezone.utc)
+        new_doc = Interview(
+            startup_id=ObjectId(startup_id_str),
+            user_id=ObjectId(user_id_str),
+            title=title or "AI Business Strategy Interview",
+            status=InterviewStatus.STARTED,
+            current_question_index=1,
+            started_at=now,
+        )
+        return await self.create(new_doc)
+
     async def add_or_update_qa(
         self,
         interview_id_str: str,
@@ -52,12 +71,14 @@ class InterviewRepository(BaseRepository[Interview]):
         question: str,
         answer: Optional[str] = None,
         category: Optional[str] = None,
+        acknowledged: Optional[str] = None,
+        rationale: Optional[str] = None,
+        knowledge_delta: Optional[Dict[str, Any]] = None,
     ) -> Optional[Interview]:
-        """Adds or updates a question-answer pair in the interview history."""
+        """Adds or updates a question-answer pair and merges newly extracted business knowledge."""
         if not ObjectId.is_valid(interview_id_str):
             return None
 
-        # Check if question_id already exists in qa_history
         doc = await self.collection.find_one({"_id": ObjectId(interview_id_str)})
         if not doc:
             return None
@@ -71,6 +92,10 @@ class InterviewRepository(BaseRepository[Interview]):
                     qa["question"] = question
                 if category:
                     qa["category"] = category
+                if acknowledged:
+                    qa["acknowledged"] = acknowledged
+                if rationale:
+                    qa["rationale"] = rationale
                 updated = True
                 break
 
@@ -80,14 +105,26 @@ class InterviewRepository(BaseRepository[Interview]):
                 "question": question,
                 "answer": answer,
                 "category": category,
+                "acknowledged": acknowledged,
+                "rationale": rationale,
             })
 
+        answered_count = len([q for q in qa_history if q.get("answer")])
+        current_idx = min(10, answered_count + 1)
+
+        extracted = doc.get("extracted_knowledge", {})
+        if knowledge_delta:
+            extracted.update(knowledge_delta)
+
+        now = datetime.now(timezone.utc)
         res = await self.collection.find_one_and_update(
             {"_id": ObjectId(interview_id_str)},
             {
                 "$set": {
                     "qa_history": qa_history,
-                    "updated_at": datetime.now(timezone.utc),
+                    "current_question_index": current_idx,
+                    "extracted_knowledge": extracted,
+                    "updated_at": now,
                     "status": InterviewStatus.IN_PROGRESS.value,
                 }
             },
@@ -97,11 +134,57 @@ class InterviewRepository(BaseRepository[Interview]):
             return self.model_class(**res)
         return None
 
+    async def pause_interview(self, interview_id_str: str) -> Optional[Interview]:
+        """Pauses interview session and records timestamp."""
+        now = datetime.now(timezone.utc)
+        return await self.update(
+            interview_id_str,
+            {"status": InterviewStatus.PAUSED.value, "paused_at": now, "updated_at": now},
+        )
+
+    async def resume_interview(self, interview_id_str: str) -> Optional[Interview]:
+        """Resumes a paused interview session."""
+        now = datetime.now(timezone.utc)
+        return await self.update(
+            interview_id_str,
+            {"status": InterviewStatus.RESUMED.value, "resumed_at": now, "updated_at": now},
+        )
+
+    async def reset_interview(
+        self, startup_id_str: str, user_id_str: str
+    ) -> Interview:
+        """Deletes existing interview document for startup and initializes a clean NOT_STARTED session."""
+        if ObjectId.is_valid(startup_id_str):
+            await self.collection.delete_many({"startup_id": self._build_id_query(startup_id_str)})
+
+        now = datetime.now(timezone.utc)
+        new_doc = Interview(
+            startup_id=ObjectId(startup_id_str),
+            user_id=ObjectId(user_id_str),
+            title="AI Business Strategy Interview",
+            status=InterviewStatus.NOT_STARTED,
+            current_question_index=1,
+            started_at=now,
+        )
+        return await self.create(new_doc)
+
     async def update_status_and_summary(
-        self, interview_id_str: str, status: InterviewStatus, summary: Optional[str] = None
+        self,
+        interview_id_str: str,
+        status: InterviewStatus,
+        summary: Optional[str] = None,
+        knowledge_base: Optional[Dict[str, Any]] = None,
     ) -> Optional[Interview]:
-        """Updates interview completion status and summary."""
-        update_dict: Dict[str, Any] = {"status": status.value if hasattr(status, "value") else str(status)}
+        """Updates interview completion status, summary, and Business Knowledge Base."""
+        now = datetime.now(timezone.utc)
+        update_dict: Dict[str, Any] = {
+            "status": status.value if hasattr(status, "value") else str(status),
+            "updated_at": now,
+        }
         if summary:
             update_dict["summary"] = summary
+        if knowledge_base:
+            update_dict["knowledge_base"] = knowledge_base
+        if status in [InterviewStatus.COMPLETED, InterviewStatus.KNOWLEDGE_GENERATED, InterviewStatus.ALL_MODULES_UPDATED]:
+            update_dict["completed_at"] = now
         return await self.update(interview_id_str, update_dict)

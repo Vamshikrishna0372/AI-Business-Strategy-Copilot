@@ -70,7 +70,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   }
 
   const activeStartupId = getActiveStartupId();
-  if (activeStartupId && !headers["X-Startup-ID"]) {
+  if (activeStartupId && activeStartupId !== "null" && activeStartupId !== "undefined" && !headers["X-Startup-ID"]) {
     headers["X-Startup-ID"] = activeStartupId;
   }
 

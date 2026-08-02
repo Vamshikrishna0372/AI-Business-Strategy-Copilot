@@ -17,6 +17,7 @@ class CollectionName(str, Enum):
     NOTIFICATIONS = "notifications"
     ACTIVITY_LOGS = "activity_logs"
     SETTINGS = "settings"
+    TAVILY_CACHE = "tavily_cache"
 
 
 def get_collection(collection_name: CollectionName) -> AsyncIOMotorCollection:
@@ -64,3 +65,7 @@ def get_activity_logs_collection() -> AsyncIOMotorCollection:
 
 def get_settings_collection() -> AsyncIOMotorCollection:
     return get_collection(CollectionName.SETTINGS)
+
+
+def get_tavily_cache_collection() -> AsyncIOMotorCollection:
+    return get_collection(CollectionName.TAVILY_CACHE)

@@ -32,71 +32,138 @@ Return a JSON object with:
 """,
 
     "ai_interview": """
-MODULE: AI Interactive Founder Interview Engine
+MODULE: AI Interactive Enterprise Startup Consultant Diagnostic Engine
 
-CONTEXT:
+CONTEXT & PRIOR Q&A HISTORY:
 {context}
 
-USER ANSWER / INTERVIEW INPUT:
+FOUNDER'S LATEST ANSWER:
 {query}
 
 INSTRUCTIONS:
-You are conducting a dynamic startup diagnostic interview across 10 sections:
-1. Founder Information
-2. Startup Basics
-3. Problem Discovery
-4. Solution Definition
-5. Target Market
-6. Business Model & Revenue
-7. Competition
-8. Financial Assumptions
-9. Vision & Mission
-10. Key Goals & Milestones
+Act as an expert Silicon Valley AI startup consultant conducting a 10-step strategic diagnostic interview.
+Do NOT use static robotic questions. Act dynamically and adapt continuously based on prior answers and the startup's specific domain (SaaS vs Healthcare vs E-commerce vs FinTech vs AI hardware).
 
-Analyze the current context and user answer. Determine if the interview is completed or needs next dynamic questions.
-Return JSON with:
-- "success": true
-- "message": "Interview step processed"
-- "data": {{
-    "current_section": "Target Market",
-    "next_question_id": "q_005",
-    "next_question": "Detailed question text tailored to startup industry and stage",
-    "question_type": "text",
+Your JSON output MUST contain:
+1. "acknowledged": Thoughtful 1-2 sentence acknowledgment of the founder's previous answer highlighting strategic implications.
+2. "rationale": Brief explanation of why you are asking the next question and why it matters for their business model.
+3. "next_question": Tailored, domain-adapted follow-up question. Never repeat questions. Reference prior answers.
+4. "category": Section name (e.g. Problem Discovery, Target Market, Revenue Model, Competitive Advantage, Tech Stack, Execution & Risks).
+5. "extracted_knowledge_delta": Object containing any newly identified or updated structured facts from this step:
+   - "industry": String
+   - "target_customers": String
+   - "problem": String
+   - "solution": String
+   - "revenue_model": String
+   - "pricing": String
+   - "business_stage": String
+   - "country": String
+   - "technology": String
+   - "competitive_advantage": String
+   - "growth_goals": String
+   - "team": String
+   - "risks": String
+   - "funding_stage": String
+   - "confidence": Float (0.0 - 1.0)
+6. "completed": Boolean (true if 10 questions completed, false otherwise)
+7. "suggestions": Array of 3 smart example responses or answer options for the founder.
+
+Return strictly formatted JSON:
+{
+    "success": true,
+    "message": "AI Consultant Step Processed",
+    "data": {
+        "acknowledged": "...",
+        "rationale": "...",
+        "next_question_id": "q_00X",
+        "category": "...",
+        "next_question": "...",
+        "question_type": "text",
+        "completed": false,
+        "summary_so_far": "...",
+        "extracted_knowledge_delta": {
+            "industry": "...",
+            "target_customers": "...",
+            "problem": "...",
+            "solution": "...",
+            "revenue_model": "...",
+            "pricing": "...",
+            "business_stage": "...",
+            "technology": "...",
+            "competitive_advantage": "...",
+            "funding_stage": "...",
+            "confidence": 0.95
+        }
+    },
     "confidence": 0.95,
-    "completed": false,
-    "summary_so_far": "Brief snapshot of interview progress"
-}}
-- "confidence": 0.95
-- "suggestions": ["Option A hint", "Option B hint"]
+    "suggestions": ["...", "...", "..."]
+}
 """,
 
     "ai_interview_summary": """
-MODULE: AI Interview Final Synthesis & Startup Profile Summary
+MODULE: AI Interview Final Synthesis & Business Knowledge Base Generation
 
-CONTEXT:
+CONTEXT & COMPLETE Q&A HISTORY:
 {context}
 
 INSTRUCTIONS:
-Synthesize all recorded founder interview answers and workspace context into a comprehensive executive summary.
-Return JSON with:
-- "success": true
-- "message": "Interview completed and summary synthesized"
-- "data": {{
-    "business_summary": "Comprehensive 3-paragraph summary of the venture",
-    "mission": "Inspiring, clear mission statement",
-    "vision": "Bold 5-10 year strategic vision statement",
-    "startup_snapshot": {{
-        "industry": "...",
-        "stage": "...",
-        "business_model": "...",
-        "core_problem": "...",
-        "core_solution": "...",
-        "target_audience": "..."
-    }},
-    "context_summary": "Clean aggregated context summary for future AI module reference"
-}}
-- "confidence": 0.95
-- "suggestions": ["Proceed to Idea Validation", "Generate Business Strategy"]
+Synthesize all recorded founder interview answers and workspace context into a comprehensive enterprise Business Knowledge Base and Executive Strategy Summary.
+Generate:
+1. Comprehensive Business Summary & Executive Profile
+2. Founder Profile & Team Strengths
+3. Structured Business Knowledge Base (15+ key attributes)
+4. Full SWOT Matrix (Strengths, Weaknesses, Opportunities, Threats)
+5. Business Context block for downstream AI modules
+
+Return JSON:
+{
+    "success": true,
+    "message": "Business Knowledge Base & Executive Summary Synthesized",
+    "data": {
+        "business_summary": "Comprehensive executive synthesis...",
+        "mission": "Clear mission statement...",
+        "vision": "Bold vision statement...",
+        "executive_profile": {
+            "venture_name": "...",
+            "tagline": "...",
+            "industry": "...",
+            "stage": "...",
+            "business_model": "...",
+            "revenue_model": "...",
+            "core_problem": "...",
+            "core_solution": "...",
+            "target_audience": "...",
+            "funding_stage": "..."
+        },
+        "swot_analysis": {
+            "strengths": ["...", "..."],
+            "weaknesses": ["...", "..."],
+            "opportunities": ["...", "..."],
+            "threats": ["...", "..."]
+        },
+        "knowledge_base": {
+            "industry": "...",
+            "target_customers": "...",
+            "problem": "...",
+            "solution": "...",
+            "revenue_model": "...",
+            "pricing": "...",
+            "business_stage": "...",
+            "country": "...",
+            "technology": "...",
+            "competitive_advantage": "...",
+            "growth_goals": "...",
+            "team": "...",
+            "risks": "...",
+            "funding_stage": "...",
+            "knowledge_completion": 100.0,
+            "confidence_score": 0.95
+        },
+        "context_summary": "Clean aggregated context summary for future AI modules"
+    },
+    "confidence": 0.95,
+    "suggestions": ["Review Idea Validation", "Generate Business Strategy"]
+}
 """,
 
     "idea_validation": """

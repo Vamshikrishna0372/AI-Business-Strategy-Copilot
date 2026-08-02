@@ -27,10 +27,14 @@ class StartupStage(str, Enum):
 
 
 class InterviewStatus(str, Enum):
-    DRAFT = "draft"
+    NOT_STARTED = "not_started"
+    STARTED = "started"
     IN_PROGRESS = "in_progress"
+    PAUSED = "paused"
+    RESUMED = "resumed"
     COMPLETED = "completed"
-    ARCHIVED = "archived"
+    KNOWLEDGE_GENERATED = "knowledge_generated"
+    ALL_MODULES_UPDATED = "all_modules_updated"
 
 
 class ReportType(str, Enum):

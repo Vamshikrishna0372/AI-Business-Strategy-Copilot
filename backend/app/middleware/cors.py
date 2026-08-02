@@ -29,20 +29,10 @@ def setup_cors_middleware(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_origin_regex=r".*",
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-        allow_headers=[
-            "Authorization",
-            "Content-Type",
-            "Accept",
-            "Origin",
-            "User-Agent",
-            "X-Startup-ID",
-            "X-Request-ID",
-            "X-Correlation-ID",
-            "X-Requested-With",
-        ],
+        allow_methods=["*"],
+        allow_headers=["*"],
         expose_headers=[
             "Authorization",
             "X-Startup-ID",

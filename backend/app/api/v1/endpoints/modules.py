@@ -9,10 +9,15 @@ from app.middleware.rate_limiter import ai_rate_limiter
 from app.models.startup import Startup
 from app.models.user import User
 from app.schemas.interview import (
+    BusinessKnowledgeResponse,
     InterviewResponse,
     InterviewStepResponse,
+    PauseInterviewRequest,
     QAPairSchema,
+    RestartInterviewRequest,
+    ResumeInterviewRequest,
     StartInterviewRequest,
+    StopInterviewRequest,
     SubmitAnswerRequest,
 )
 from app.schemas.reports_schema import ReportResponse
@@ -84,6 +89,74 @@ async def submit_interview_answer(
 
 
 @router.post(
+    "/interview/pause",
+    response_model=ResponseModel[InterviewStepResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Pause AI Business Interview",
+)
+async def pause_interview(
+    body: Optional[PauseInterviewRequest] = None,
+    current_user: User = Depends(get_current_user),
+    current_startup: Startup = Depends(get_current_active_startup),
+):
+    """Pauses interview session and saves progress in MongoDB."""
+    ai_rate_limiter.check_rate_limit(str(current_user.id), str(current_startup.id))
+    res = await ai_service.pause_interview(user=current_user, startup=current_startup)
+    return ResponseModel(success=True, message="Interview session paused", data=res)
+
+
+@router.post(
+    "/interview/resume",
+    response_model=ResponseModel[InterviewStepResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Resume AI Business Interview",
+)
+async def resume_interview(
+    body: Optional[ResumeInterviewRequest] = None,
+    current_user: User = Depends(get_current_user),
+    current_startup: Startup = Depends(get_current_active_startup),
+):
+    """Resumes paused interview session at the exact current question."""
+    ai_rate_limiter.check_rate_limit(str(current_user.id), str(current_startup.id))
+    res = await ai_service.resume_interview(user=current_user, startup=current_startup)
+    return ResponseModel(success=True, message="Interview session resumed", data=res)
+
+
+@router.post(
+    "/interview/stop",
+    response_model=ResponseModel[InterviewStepResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Stop AI Business Interview",
+)
+async def stop_interview(
+    body: Optional[StopInterviewRequest] = None,
+    current_user: User = Depends(get_current_user),
+    current_startup: Startup = Depends(get_current_active_startup),
+):
+    """Stops interview session while preserving all recorded answers."""
+    ai_rate_limiter.check_rate_limit(str(current_user.id), str(current_startup.id))
+    res = await ai_service.stop_interview(user=current_user, startup=current_startup)
+    return ResponseModel(success=True, message="Interview session stopped", data=res)
+
+
+@router.post(
+    "/interview/restart",
+    response_model=ResponseModel[InterviewStepResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Restart AI Business Interview",
+)
+async def restart_interview(
+    body: Optional[RestartInterviewRequest] = None,
+    current_user: User = Depends(get_current_user),
+    current_startup: Startup = Depends(get_current_active_startup),
+):
+    """Resets existing interview session after confirmation and starts fresh from Question 1."""
+    ai_rate_limiter.check_rate_limit(str(current_user.id), str(current_startup.id))
+    res = await ai_service.restart_interview(user=current_user, startup=current_startup)
+    return ResponseModel(success=True, message="Interview session restarted", data=res)
+
+
+@router.post(
     "/interview/complete",
     response_model=ResponseModel[ReportResponse],
     status_code=status.HTTP_200_OK,
@@ -115,18 +188,67 @@ async def get_startup_interview(
     if not interview:
         raise NotFoundException(f"No interview found for startup '{startupId}'")
 
+    answered_count = len(interview.qa_history)
+    current_num = min(10, answered_count + 1)
+    progress = 100.0 if (interview.status.value if hasattr(interview.status, "value") else str(interview.status)) in ["completed", "knowledge_generated", "all_modules_updated"] else round((answered_count / 10.0) * 100.0)
+
     data = InterviewResponse(
         id=str(interview.id),
         startup_id=str(interview.startup_id),
         user_id=str(interview.user_id),
         title=interview.title,
         status=interview.status.value if hasattr(interview.status, "value") else str(interview.status),
-        qa_history=[QAPairSchema(**qa) for qa in interview.qa_history],
+        current_question_number=current_num,
+        total_questions=10,
+        progress_percentage=progress,
+        qa_history=[
+            QAPairSchema(**qa.model_dump()) if hasattr(qa, "model_dump") else QAPairSchema(**qa)
+            for qa in interview.qa_history
+        ],
+        extracted_knowledge=interview.extracted_knowledge or {},
+        knowledge_base=interview.knowledge_base,
         summary=interview.summary,
+        started_at=interview.started_at,
+        paused_at=interview.paused_at,
+        resumed_at=interview.resumed_at,
+        completed_at=interview.completed_at,
         created_at=interview.created_at,
         updated_at=interview.updated_at,
     )
     return ResponseModel(success=True, message="Interview details retrieved", data=data)
+
+
+@router.get(
+    "/interview/{startupId}/knowledge",
+    response_model=ResponseModel[BusinessKnowledgeResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get Business Knowledge Base extracted from Interview",
+)
+async def get_business_knowledge(
+    startupId: str,
+    current_user: User = Depends(get_current_user),
+    current_startup: Startup = Depends(get_current_active_startup),
+):
+    """Retrieves extracted Business Knowledge Base for active startup."""
+    interview = await ai_service.interview_repo.get_latest_interview(startupId)
+    if not interview:
+        raise NotFoundException(f"No interview found for startup '{startupId}'")
+
+    knowledge = interview.knowledge_base or interview.extracted_knowledge or {}
+    filled_keys = len([k for k, v in knowledge.items() if v and str(v).strip()])
+    completion = min(100.0, round((filled_keys / 14.0) * 100.0))
+
+    data = BusinessKnowledgeResponse(
+        startup_id=str(interview.startup_id),
+        interview_id=str(interview.id),
+        status=interview.status.value if hasattr(interview.status, "value") else str(interview.status),
+        knowledge=knowledge,
+        knowledge_completion_percentage=completion,
+        confidence_score=0.95,
+        updated_at=interview.updated_at,
+    )
+    return ResponseModel(success=True, message="Business Knowledge Base retrieved", data=data)
+
 
 
 # --- MODULE 2: IDEA VALIDATION ---

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ShieldAlert, TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Bar, PageHeader, SurfaceCard } from "@/components/common/ui-kit";
@@ -131,7 +131,7 @@ function Risk() {
                       </div>
                     ))}
                     {[...impactLevels].reverse().map((level) => (
-                      <>
+                      <Fragment key={level}>
                         <div key={`l-${level}`} className="flex items-center text-xs text-muted-foreground">
                           {level} impact
                         </div>
@@ -157,7 +157,7 @@ function Risk() {
                             </div>
                           );
                         })}
-                      </>
+                      </Fragment>
                     ))}
                   </div>
                 </div>
