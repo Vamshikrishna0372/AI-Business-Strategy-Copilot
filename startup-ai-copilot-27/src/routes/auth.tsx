@@ -296,12 +296,10 @@ function AuthPage() {
     }
   };
 
-  // ── Google OAuth — popup on desktop, redirect on mobile ──
-  // Popup flow (desktop): onSuccess fires immediately in the same tab.
-  // Redirect flow (mobile): Google redirects back to /auth with #access_token in the hash,
-  //   which the useEffect above picks up and processes.
-  const mobile = isMobileBrowser();
-
+  // ── Google OAuth — unified popup flow for all devices ──
+  // Uses @react-oauth/google popup which only requires Authorized JavaScript Origins
+  // (not Redirect URIs) in Google Cloud Console, so no redirect_uri_mismatch can occur.
+  // Works on both desktop and Android Chrome.
   const handleGoogleLoginPopup = useGoogleLogin({
     onSuccess: useCallback(async (tokenResponse) => {
       setGoogleLoading(true);
@@ -332,24 +330,10 @@ function AuthPage() {
   const triggerGoogleLogin = () => {
     setErrorMessage(null);
     setGoogleLoading(true);
-    if (mobile) {
-      // On Android/mobile: direct native top-level OAuth redirect (GIS initTokenClient JS popup fails on Android Chrome)
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "729000417397-bi71cdt1hql1isaa37rkcg9j9df99fqe.apps.googleusercontent.com";
-      const redirectUri = typeof window !== "undefined" ? `${window.location.origin}/auth` : "https://ai-business-strategy-copilot.vercel.app/auth";
-      const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: "token",
-        scope: "openid email profile",
-        include_granted_scopes: "true",
-        prompt: "select_account",
-      });
-      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-    } else {
-      // On desktop: popup flow — onSuccess fires in same tab
-      setGoogleLoading(false);
-      handleGoogleLoginPopup();
-    }
+    // Use popup flow on all devices — requires only Authorized JavaScript Origins, not Redirect URIs.
+    // Setting googleLoading is handled inside onSuccess/onError callbacks.
+    setGoogleLoading(false);
+    handleGoogleLoginPopup();
   };
 
   const isAnyLoading = submitting || googleLoading || isLoading;
