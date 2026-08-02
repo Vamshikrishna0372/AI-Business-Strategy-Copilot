@@ -466,7 +466,7 @@ export interface InterviewQuestion {
   total_questions: number;
   suggestions: string[];
   estimated_time_minutes: number;
-  follow_up_context?: string;
+  follow_up_context?: string | undefined;
 }
 
 export interface InterviewStartResponse {
@@ -499,13 +499,15 @@ export interface InterviewCompleteResponse {
 export interface InterviewStatusResponse {
   session_id: string | null;
   startup_id: string;
-  status: "not_started" | "in_progress" | "completed";
+  status: "not_started" | "started" | "in_progress" | "paused" | "resumed" | "completed" | "knowledge_generated" | "all_modules_updated";
   current_question_number: number;
   total_questions: number;
   progress_percentage: number;
-  qa_history: Array<{ question: string; answer: string; category: string }>;
-  summary?: string;
-  key_insights?: string[];
+  qa_history: Array<{ question: string; answer: string; category: string; acknowledged?: string | undefined; rationale?: string | undefined }>;
+  extracted_knowledge?: Record<string, any> | undefined;
+  knowledge_base?: Record<string, any> | undefined;
+  summary?: string | undefined;
+  key_insights?: string[] | undefined;
 }
 
 // ─── Other module types ───────────────────────────────────────────────────────
@@ -592,6 +594,9 @@ export interface FinancialPlanningData {
   runway: string;
   streams: FinancialStream[];
   cashflow_projection: Array<{ month: string; inflow: number; outflow: number }>;
+  cashflow?: Array<{ month: string; inflow: number; outflow: number }>;
+  pricing_tiers?: Array<{ tier: string; price: string; best_for: string; accounts: number }>;
+  financial_insight?: string;
   revenue_forecast: Array<{ quarter: string; revenue: number; costs: number; profit: number }>;
 }
 
@@ -703,7 +708,7 @@ function adaptStep(step: BackendInterviewStep, startupId: string, qaCount: numbe
     total_questions: step.total_questions || 10,
     suggestions: [],
     estimated_time_minutes: step.estimated_time_remaining_minutes || 10,
-    follow_up_context: step.rationale_for_question,
+    follow_up_context: step.rationale_for_question || undefined,
   };
   return {
     session_id: step.interview_id,
@@ -724,7 +729,7 @@ function adaptStepToAnswer(step: BackendInterviewStep, answered: string, startup
         total_questions: step.total_questions || 10,
         suggestions: [],
         estimated_time_minutes: step.estimated_time_remaining_minutes || 8,
-        follow_up_context: step.rationale_for_question,
+        follow_up_context: step.rationale_for_question || undefined,
       };
 
   const answered_count = step.qa_history?.length ?? 0;
@@ -817,8 +822,8 @@ export const aiModulesService = {
     const result: InterviewCompleteResponse = {
       session_id,
       startup_id: report.startup_id,
-      summary: content.business_summary || content.summary || "Interview complete.",
-      key_insights: content.key_insights ?? [],
+      summary: (content["business_summary"] as string) || (content["summary"] as string) || "Interview complete.",
+      key_insights: (content["key_insights"] as string[]) ?? [],
       modules_ready: ["idea_validation", "business_strategy", "competitor_analysis", "business_model_canvas", "financial_planning", "risk_analysis", "investor_readiness", "execution_roadmap"],
       report_version: report.version,
       generated_at: report.created_at,
@@ -838,8 +843,8 @@ export const aiModulesService = {
         question: q.question,
         answer: q.answer ?? "",
         category: q.category ?? "General",
-        acknowledged: q.acknowledged,
-        rationale: q.rationale,
+        acknowledged: q.acknowledged || undefined,
+        rationale: q.rationale || undefined,
       }));
       const answered = qa.length;
       const progress = detail.progress_percentage ?? (["completed", "knowledge_generated", "all_modules_updated"].includes(detail.status) ? 100 : Math.min(95, Math.round((answered / 10) * 100)));
@@ -1026,7 +1031,7 @@ export const aiModulesService = {
       }
     }
 
-    return statuses as ModuleStatuses;
+    return (statuses as unknown) as ModuleStatuses;
   },
 };
 

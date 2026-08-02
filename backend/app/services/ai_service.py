@@ -480,8 +480,32 @@ class AIService:
         return await self.start_interview(user, startup)
 
     async def stop_interview(self, user: User, startup: Startup) -> InterviewStepResponse:
-        """Stops the interview session without deleting saved answers."""
-        return await self.pause_interview(user, startup)
+        """Stops the interview session and writes STOPPED status to MongoDB. Preserves all answers."""
+        interview = await self.interview_repo.get_latest_interview(str(startup.id))
+        if not interview:
+            raise ValueError("No active interview session found to stop.")
+        stopped = await self.interview_repo.stop_interview(str(interview.id))
+        if not stopped:
+            stopped = interview
+
+        answered_count = len(stopped.qa_history)
+        return InterviewStepResponse(
+            interview_id=str(stopped.id),
+            current_section="Stopped",
+            current_question_number=min(10, answered_count + 1),
+            total_questions=10,
+            progress_percentage=round((answered_count / 10.0) * 100.0),
+            status=InterviewStatus.STOPPED.value,
+            next_question_id=f"q_{answered_count + 1:03d}",
+            next_question="Interview stopped. Click 'Resume Interview' or 'Restart Interview' to continue.",
+            completed=False,
+            qa_history=[
+                QAPairSchema(**qa.model_dump()) if hasattr(qa, "model_dump") else QAPairSchema(**qa)
+                for qa in stopped.qa_history
+            ],
+            extracted_knowledge=stopped.extracted_knowledge or {},
+            summary_so_far=f"Interview stopped at {answered_count}/10 questions. All answers preserved.",
+        )
 
     async def restart_interview(self, user: User, startup: Startup) -> InterviewStepResponse:
         """Deletes existing interview session after confirmation and starts fresh from Question 1."""

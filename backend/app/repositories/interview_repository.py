@@ -142,13 +142,22 @@ class InterviewRepository(BaseRepository[Interview]):
             {"status": InterviewStatus.PAUSED.value, "paused_at": now, "updated_at": now},
         )
 
+    async def stop_interview(self, interview_id_str: str) -> Optional[Interview]:
+        """Stops interview session (distinct from pause) and writes STOPPED status to MongoDB."""
+        now = datetime.now(timezone.utc)
+        return await self.update(
+            interview_id_str,
+            {"status": InterviewStatus.STOPPED.value, "paused_at": now, "updated_at": now},
+        )
+
     async def resume_interview(self, interview_id_str: str) -> Optional[Interview]:
-        """Resumes a paused interview session."""
+        """Resumes a paused or stopped interview session."""
         now = datetime.now(timezone.utc)
         return await self.update(
             interview_id_str,
             {"status": InterviewStatus.RESUMED.value, "resumed_at": now, "updated_at": now},
         )
+
 
     async def reset_interview(
         self, startup_id_str: str, user_id_str: str

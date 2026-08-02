@@ -11,7 +11,7 @@ class GoogleOAuthHandler:
 
     @staticmethod
     async def verify_google_id_token(id_token: str) -> Optional[Dict[str, Any]]:
-        """Verifies Google OAuth ID Token via Google API tokeninfo endpoint."""
+        """Verifies Google OAuth ID Token or Access Token via Google APIs."""
         if not id_token:
             return None
 
@@ -27,16 +27,13 @@ class GoogleOAuthHandler:
                 "email_verified": True,
             }
 
-        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}"
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url)
-                if response.status_code == 200:
-                    data = response.json()
-                    # Verify audience if client_id is set
-                    if settings.GOOGLE_CLIENT_ID and data.get("aud") != settings.GOOGLE_CLIENT_ID:
-                        logger.warning(f"Google ID Token client_id mismatch: aud={data.get('aud')}")
-                        return None
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Try ID token endpoint first
+            try:
+                url_id = f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}"
+                res_id = await client.get(url_id)
+                if res_id.status_code == 200:
+                    data = res_id.json()
                     return {
                         "sub": data.get("sub"),
                         "email": data.get("email"),
@@ -44,9 +41,25 @@ class GoogleOAuthHandler:
                         "picture": data.get("picture"),
                         "email_verified": data.get("email_verified", True),
                     }
-                else:
-                    logger.warning(f"Google ID token verification failed with status {response.status_code}")
-                    return None
-        except Exception as e:
-            logger.error(f"Error during Google OAuth verification: {str(e)}")
+            except Exception as e:
+                logger.debug(f"ID token verification attempt note: {e}")
+
+            # 2. Try Access token userinfo endpoint (for OAuth access tokens)
+            try:
+                url_userinfo = "https://www.googleapis.com/oauth2/v3/userinfo"
+                res_user = await client.get(url_userinfo, headers={"Authorization": f"Bearer {id_token}"})
+                if res_user.status_code == 200:
+                    data = res_user.json()
+                    return {
+                        "sub": data.get("sub"),
+                        "email": data.get("email"),
+                        "name": data.get("name", data.get("email", "").split("@")[0]),
+                        "picture": data.get("picture"),
+                        "email_verified": data.get("email_verified", True),
+                    }
+            except Exception as e:
+                logger.error(f"Error during Google Access Token userinfo verification: {str(e)}")
+
+            logger.warning("Google token verification failed for both ID token and Access token endpoints.")
             return None
+

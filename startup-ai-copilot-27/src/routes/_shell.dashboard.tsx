@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import { ArrowRight, Download, FileText, Loader2, MessageSquareText, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { aiModulesService } from "@/services/ai-modules-service";
 
 import { AiBadge, MetricCard, PageHeader, ScoreRing, SurfaceCard } from "@/components/common/ui-kit";
 import { Button } from "@/components/ui/button";

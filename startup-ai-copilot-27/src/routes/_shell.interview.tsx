@@ -251,12 +251,11 @@ function Interview() {
           const stepRes = await aiModulesService.startInterview();
           if (stepRes.first_question) {
             setCurrentQuestion(stepRes.first_question);
-            history.push({
-              role: "ai",
-              text: stepRes.first_question.question,
-              acknowledged: stepRes.first_question.follow_up_context ? undefined : undefined,
-              rationale: stepRes.first_question.follow_up_context,
-            });
+            const aiMsg: Msg = { role: "ai", text: stepRes.first_question.question };
+            if (stepRes.first_question.follow_up_context) {
+              aiMsg.rationale = stepRes.first_question.follow_up_context;
+            }
+            history.push(aiMsg);
           }
         } catch {
           // Keep existing history
@@ -399,15 +398,11 @@ function Interview() {
         }
       } else if (res.next_question) {
         setCurrentQuestion(res.next_question);
-        setMessages((m) => [
-          ...m,
-          {
-            role: "ai",
-            text: res.next_question!.question,
-            acknowledged: res.next_question!.follow_up_context ? undefined : undefined,
-            rationale: res.next_question!.follow_up_context,
-          },
-        ]);
+        const aiNextMsg: Msg = { role: "ai", text: res.next_question.question };
+        if (res.next_question.follow_up_context) {
+          aiNextMsg.rationale = res.next_question.follow_up_context;
+        }
+        setMessages((m) => [...m, aiNextMsg]);
         setThinking(false);
       }
     } catch (err: any) {

@@ -31,6 +31,7 @@ class InterviewStatus(str, Enum):
     STARTED = "started"
     IN_PROGRESS = "in_progress"
     PAUSED = "paused"
+    STOPPED = "stopped"
     RESUMED = "resumed"
     COMPLETED = "completed"
     KNOWLEDGE_GENERATED = "knowledge_generated"
