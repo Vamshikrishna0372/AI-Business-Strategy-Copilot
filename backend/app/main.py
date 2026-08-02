@@ -60,15 +60,7 @@ def create_application() -> FastAPI:
     from starlette.middleware.trustedhost import TrustedHostMiddleware
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=[
-            "ai-business-strategy-copilot.onrender.com",
-            "ai-business-strategy-copilot.vercel.app",
-            "*.onrender.com",
-            "*.vercel.app",
-            "localhost",
-            "127.0.0.1",
-            "0.0.0.0",
-        ],
+        allowed_hosts=["*"],
     )
 
     # Register Pure ASGI Logging Middleware (inner)
