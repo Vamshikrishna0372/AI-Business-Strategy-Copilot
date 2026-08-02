@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { ArrowRight, Loader2, Lock, Mail, User as UserIcon, Shield, Zap, TrendingUp, Target, BarChart3, Rocket, CheckCircle2, Brain, ChevronRight } from "lucide-react";
 
@@ -98,143 +98,51 @@ function LeftPanel() {
             <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
           </radialGradient>
         </defs>
-        {/* Grid lines */}
-        {[0,1,2,3,4,5,6,7].map(i => (
-          <line key={`v${i}`} x1={`${i*14.3}%`} y1="0" x2={`${i*14.3}%`} y2="100%" stroke="#818cf8" strokeWidth="0.5" />
-        ))}
-        {[0,1,2,3,4,5,6,7,8].map(i => (
-          <line key={`h${i}`} x1="0" y1={`${i*12.5}%`} x2="100%" y2={`${i*12.5}%`} stroke="#818cf8" strokeWidth="0.5" />
-        ))}
-        {/* Neural connection lines */}
-        <line x1="10%" y1="15%" x2="35%" y2="42%" stroke="#6366f1" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.7" />
-        <line x1="35%" y1="42%" x2="65%" y2="25%" stroke="#8b5cf6" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.7" />
-        <line x1="65%" y1="25%" x2="88%" y2="55%" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.7" />
-        <line x1="20%" y1="70%" x2="50%" y2="58%" stroke="#6366f1" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.6" />
-        <line x1="50%" y1="58%" x2="75%" y2="72%" stroke="#8b5cf6" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.6" />
-        <line x1="15%" y1="88%" x2="45%" y2="80%" stroke="#3b82f6" strokeWidth="1" strokeDasharray="3 5" opacity="0.5" />
-        <line x1="45%" y1="80%" x2="80%" y2="90%" stroke="#6366f1" strokeWidth="1" strokeDasharray="3 5" opacity="0.5" />
-        {/* Nodes */}
-        {[
-          [10,15],[35,42],[65,25],[88,55],
-          [20,70],[50,58],[75,72],[15,88],[45,80],[80,90],
-          [5,35],[55,10],[90,35],[60,85],
-        ].map(([x,y], i) => (
-          <circle key={i} cx={`${x}%`} cy={`${y}%`} r={i < 4 ? 4 : 3} fill="#818cf8" opacity={i < 4 ? 0.9 : 0.6} />
+        {Array.from({ length: 8 }, (_, row) =>
+          Array.from({ length: 5 }, (_, col) => {
+            const x = col * 180 + (row % 2) * 90 + 40;
+            const y = row * 110 + 40;
+            return <circle key={`${row}-${col}`} cx={x} cy={y} r={3} fill="url(#ng)" opacity={0.6} />;
+          })
+        )}
+        {Array.from({ length: 12 }, (_, i) => (
+          <line key={i}
+            x1={Math.random() * 800} y1={Math.random() * 700}
+            x2={Math.random() * 800} y2={Math.random() * 700}
+            stroke="#818cf8" strokeWidth={0.6} opacity={0.3}
+          />
         ))}
       </svg>
 
-      {/* Floating particles */}
-      {[...Array(18)].map((_, i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute",
-            width: i % 3 === 0 ? 3 : 2,
-            height: i % 3 === 0 ? 3 : 2,
-            borderRadius: "50%",
-            background: i % 2 === 0 ? "rgba(129,140,248,0.7)" : "rgba(139,92,246,0.5)",
-            left: `${5 + (i * 87 / 17) % 90}%`,
-            top: `${10 + (i * 73 / 17) % 80}%`,
-            animation: `float ${4 + (i % 4)}s ease-in-out infinite`,
-            animationDelay: `${(i * 0.4) % 3}s`,
-          }}
-        />
-      ))}
-
-      {/* Floating metric card */}
-      <div style={{
-        position: "absolute", top: "28%", right: "8%",
-        background: "rgba(255,255,255,0.06)",
-        backdropFilter: "blur(12px)",
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 16,
-        padding: "14px 18px",
-        animation: "float 7s ease-in-out infinite",
-        animationDelay: "1s",
-        minWidth: 160,
-      }}>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 4, letterSpacing: "0.08em", textTransform: "uppercase" }}>Strategy Score</div>
-        <div style={{ fontSize: 26, fontWeight: 700, color: "#fff", lineHeight: 1 }}>94<span style={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }}>/100</span></div>
-        <div style={{ fontSize: 11, color: "#86efac", marginTop: 4 }}>▲ Investor-Ready</div>
-      </div>
-
-      <div style={{
-        position: "absolute", bottom: "32%", left: "8%",
-        background: "rgba(255,255,255,0.06)",
-        backdropFilter: "blur(12px)",
-        border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 16,
-        padding: "12px 16px",
-        animation: "float 9s ease-in-out infinite",
-        animationDelay: "2.5s",
-        minWidth: 150,
-      }}>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 4, letterSpacing: "0.08em", textTransform: "uppercase" }}>Market Opportunity</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1 }}>$4.2B</div>
-        <div style={{ fontSize: 11, color: "#93c5fd", marginTop: 4 }}>↗ TAM validated</div>
-      </div>
-
       {/* Content */}
-      <div className="relative z-10 flex h-full flex-col justify-between p-12">
+      <div style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%", padding: "48px 48px 40px" }}>
         {/* Logo */}
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="Copilot" width={40} height={40} className="size-10 drop-shadow-lg" />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 56 }}>
+          <img src={logo} alt="" width={36} height={36} style={{ borderRadius: 8 }} />
           <div>
             <div style={{ color: "#fff", fontFamily: "Sora, sans-serif", fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em" }}>AI Business Strategy</div>
-            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, letterSpacing: "0.05em", textTransform: "uppercase" }}>Copilot</div>
+            <div style={{ color: "rgba(255,255,255,0.42)", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Copilot Platform</div>
           </div>
         </div>
 
-        {/* Hero copy */}
-        <div style={{ maxWidth: 440 }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: "rgba(99,102,241,0.18)", border: "1px solid rgba(99,102,241,0.35)",
-            borderRadius: 100, padding: "4px 12px", marginBottom: 20,
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#818cf8", animation: "pulse 2s ease-in-out infinite", display: "inline-block" }} />
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 500 }}>Enterprise AI Platform</span>
-          </div>
-
-          <h2 style={{
-            fontSize: "clamp(26px, 3vw, 38px)", fontFamily: "Sora, sans-serif",
-            fontWeight: 700, color: "#fff", lineHeight: 1.2, letterSpacing: "-0.03em",
-            marginBottom: 16,
-          }}>
-            Turn your startup idea into an{" "}
-            <span style={{
-              background: "linear-gradient(90deg, #818cf8, #c084fc, #60a5fa)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            }}>
-              investor-ready business
+        {/* Headline */}
+        <div style={{ flex: 1 }}>
+          <h2 style={{ fontSize: 34, fontWeight: 700, lineHeight: 1.15, letterSpacing: "-0.03em", color: "#fff", marginBottom: 16, fontFamily: "Sora, sans-serif" }}>
+            From idea to<br />
+            <span style={{ background: "linear-gradient(90deg, #818cf8, #c084fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              investor ready
             </span>
           </h2>
-
-          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.6)", lineHeight: 1.65, marginBottom: 32 }}>
-            AI-powered strategy, market intelligence, financial planning, and execution guidance — all in one platform.
+          <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, maxWidth: 340, marginBottom: 40 }}>
+            AI-powered business strategy, market validation, financial planning and execution guidance — all in one workspace.
           </p>
 
           {/* Feature list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {FEATURES.map(({ icon: Icon, label, desc }) => (
-              <div key={label} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "10px 14px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                borderRadius: 12,
-                transition: "background 0.2s",
-              }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-              >
-                <div style={{
-                  width: 32, height: 32, borderRadius: 8,
-                  background: "rgba(99,102,241,0.2)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                }}>
-                  <Icon size={15} color="#818cf8" />
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 14px", background: "rgba(255,255,255,0.05)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(99,102,241,0.22)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon size={16} color="#a5b4fc" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", lineHeight: 1.2 }}>{label}</div>
@@ -271,6 +179,12 @@ function LeftPanel() {
   );
 }
 
+// ─── Detect mobile browser ─────────────────────────────────────────────────────
+function isMobileBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent);
+}
+
 // ─── Auth page ─────────────────────────────────────────────────────────────────
 function AuthPage() {
   const { loginWithEmail, loginWithGoogle, isLoading } = useAuth();
@@ -282,6 +196,50 @@ function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Track whether we are processing a redirect-return token
+  const redirectHandled = useRef(false);
+
+  // ── On mount: check if we are returning from a Google redirect flow ──
+  // Google implicit redirect returns access_token in the URL hash: #access_token=...
+  useEffect(() => {
+    if (redirectHandled.current) return;
+
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("access_token")) return;
+
+    redirectHandled.current = true;
+
+    const params = new URLSearchParams(hash.replace(/^#/, ""));
+    const accessToken = params.get("access_token");
+    const error = params.get("error");
+
+    // Clean the hash from URL immediately so it doesn't persist
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+
+    if (error) {
+      if (!error.includes("access_denied")) {
+        setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
+      }
+      return;
+    }
+
+    if (accessToken) {
+      setGoogleLoading(true);
+      loginWithGoogle(accessToken)
+        .then(() => {
+          toast.success("Welcome! Signed in with Google.");
+          navigate({ to: "/dashboard" });
+        })
+        .catch((err: any) => {
+          setErrorMessage(friendlyError(err));
+          toast.error("Google sign-in failed. Please try again.");
+        })
+        .finally(() => {
+          setGoogleLoading(false);
+        });
+    }
+  }, [loginWithGoogle, navigate]);
 
   // ── Friendly error translator ──
   const friendlyError = (err: any): string => {
@@ -331,23 +289,17 @@ function AuthPage() {
     }
   };
 
-  // ── Real Google OAuth via popup ──
-  const handleGoogleLogin = useGoogleLogin({
+  // ── Google OAuth — popup on desktop, redirect on mobile ──
+  // Popup flow (desktop): onSuccess fires immediately in the same tab.
+  // Redirect flow (mobile): Google redirects back to /auth with #access_token in the hash,
+  //   which the useEffect above picks up and processes.
+  const mobile = isMobileBrowser();
+
+  const handleGoogleLoginPopup = useGoogleLogin({
     onSuccess: useCallback(async (tokenResponse) => {
       setGoogleLoading(true);
       setErrorMessage(null);
       try {
-        // Exchange the access token for user info, then send to backend
-        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        if (!userInfoRes.ok) throw new Error("Failed to get user information from Google.");
-        const userInfo = await userInfoRes.json();
-
-        // We send the sub (Google UID) as id_token substitute via a special login call
-        // The backend already supports email-based login, so we use a hybrid approach:
-        // POST to /api/v1/auth/google with the id_token field set to access_token
-        // The backend verifies via Google's tokeninfo endpoint
         await loginWithGoogle(tokenResponse.access_token);
         toast.success("Welcome! Signed in with Google.");
         navigate({ to: "/dashboard" });
@@ -361,16 +313,45 @@ function AuthPage() {
 
     onError: (err) => {
       setGoogleLoading(false);
-      // popup_closed_by_user is not an error — silently ignore
       const desc = (err as any)?.error_description || (err as any)?.error || "";
-      if (desc.includes("popup_closed") || desc.includes("access_denied")) {
-        return; // user cancelled — no toast, no error message
-      }
+      if (desc.includes("popup_closed") || desc.includes("access_denied")) return;
       setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
     },
 
     flow: "implicit",
+    ux_mode: "popup",
   });
+
+  const handleGoogleLoginRedirect = useGoogleLogin({
+    flow: "implicit",
+    ux_mode: "redirect",
+    // After Google auth completes, it redirects back to this page with the token in the hash
+    redirect_uri: typeof window !== "undefined" ? `${window.location.origin}/auth` : undefined,
+
+    onSuccess: () => {
+      // This fires on non-redirect flows — not used in mobile path
+    },
+    onError: (err) => {
+      setGoogleLoading(false);
+      const desc = (err as any)?.error_description || (err as any)?.error || "";
+      if (!desc.includes("access_denied")) {
+        setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
+      }
+    },
+  });
+
+  const triggerGoogleLogin = () => {
+    setErrorMessage(null);
+    setGoogleLoading(true);
+    if (mobile) {
+      // On mobile: use redirect flow — page will reload with token in hash
+      handleGoogleLoginRedirect();
+    } else {
+      // On desktop: use popup flow — onSuccess fires in same tab
+      setGoogleLoading(false); // popup sets its own loading state via onSuccess
+      handleGoogleLoginPopup();
+    }
+  };
 
   const isAnyLoading = submitting || googleLoading || isLoading;
 
@@ -427,14 +408,24 @@ function AuthPage() {
               </div>
             )}
 
+            {/* Redirect return loading state */}
+            {googleLoading && (
+              <div style={{
+                marginBottom: 20, padding: "14px",
+                background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.18)",
+                borderRadius: 10, fontSize: 13, color: "var(--foreground)",
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <Loader2 size={16} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+                Completing Google sign-in…
+              </div>
+            )}
+
             {/* Google button */}
             <button
               className="google-btn"
               disabled={isAnyLoading}
-              onClick={() => {
-                setErrorMessage(null);
-                handleGoogleLogin();
-              }}
+              onClick={triggerGoogleLogin}
               style={{
                 display: "flex", width: "100%", alignItems: "center", justifyContent: "center",
                 gap: 10, height: 46,
