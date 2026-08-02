@@ -57,6 +57,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -122,17 +123,19 @@ function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r">
-      <SidebarContent className="gap-1">
+      <SidebarHeader className="sticky top-0 z-20 shrink-0 border-b border-sidebar-border/60 bg-sidebar p-0 shadow-xs">
         <div className={cn("flex items-center gap-2.5 px-3 py-4", collapsed && "justify-center px-0")}>
           <img src={logo} alt="Copilot logo" width={32} height={32} className="size-8 shrink-0" />
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-semibold">Copilot</p>
+              <p className="truncate font-display text-sm font-semibold text-sidebar-foreground">Copilot</p>
               <p className="truncate text-[11px] text-muted-foreground">AI Business Strategy</p>
             </div>
           )}
         </div>
+      </SidebarHeader>
 
+      <SidebarContent className="flex-1 overflow-y-auto gap-1">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>{item({ title: "Home", url: "/dashboard", icon: Home })}</SidebarMenu>
