@@ -64,20 +64,20 @@ function OverviewPage() {
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Mission</dt>
-              <dd className="mt-1 text-sm">{workspace.mission}</dd>
+              <dd className="mt-1 text-sm">{workspace.mission && !workspace.mission.includes("pending") ? workspace.mission : "Generate after AI Interview"}</dd>
             </div>
             <div>
               <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Vision</dt>
-              <dd className="mt-1 text-sm">{workspace.vision}</dd>
+              <dd className="mt-1 text-sm">{workspace.vision && !workspace.vision.includes("pending") ? workspace.vision : "Generate after AI Interview"}</dd>
             </div>
             <div>
               <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Industry</dt>
-              <dd className="mt-1 text-sm">{activeStartup.industry}</dd>
+              <dd className="mt-1 text-sm">{activeStartup.industry || "Not selected"}</dd>
             </div>
             <div>
               <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Stage</dt>
               <dd className="mt-1 text-sm">
-                {activeStartup.stage} · {activeStartup.country}
+                {activeStartup.stage || "Not selected"}{activeStartup.country ? ` · ${activeStartup.country}` : ""}
               </dd>
             </div>
           </dl>

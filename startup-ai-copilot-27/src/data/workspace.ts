@@ -108,14 +108,12 @@ export function buildWorkspace(startup: Startup): Workspace {
 
   const firstOpen = modules[0]!;
 
-  const base = startup.score || 50;
-
   const scores: ScoreCardData[] = [
-    { key: "health", label: "Business Health", value: clamp(base - 9), trend: 0, reason: "Complete the AI Business Interview to generate your health score.", recommendation: "Start the AI Business Interview.", tone: "primary" },
-    { key: "investor", label: "Investor Readiness", value: startup.investorReadiness || 0, trend: 0, reason: "Investor readiness is calculated from your business journey progress.", recommendation: "Complete more journey modules to raise this score.", tone: "success" },
-    { key: "innovation", label: "Innovation", value: clamp(base + 1), trend: 0, reason: "Score updates after AI Business Interview is complete.", recommendation: "Run the AI Business Interview first.", tone: "primary" },
+    { key: "health", label: "Business Health", value: startup.score || 0, trend: 0, reason: startup.score ? "Calculated from completed AI Interview and analytics." : "Complete the AI Business Interview to generate your health score.", recommendation: "Start the AI Business Interview.", tone: "primary" },
+    { key: "investor", label: "Investor Readiness", value: startup.investorReadiness || 0, trend: 0, reason: startup.investorReadiness ? "Calculated from your business journey progress." : "Investor readiness is calculated from your business journey progress.", recommendation: "Complete more journey modules to raise this score.", tone: "success" },
+    { key: "innovation", label: "Innovation", value: 0, trend: 0, reason: "Score updates after AI Business Interview is complete.", recommendation: "Run the AI Business Interview first.", tone: "primary" },
     { key: "execution", label: "Execution Progress", value: 0, trend: 0, reason: "0 of 9 journey modules complete.", recommendation: `Start with ${firstOpen.title}.`, tone: "warning" },
-    { key: "market", label: "Market Opportunity", value: clamp(base + 3), trend: 0, reason: "Score updates after Idea Validation module is complete.", recommendation: "Run Idea Validation.", tone: "success" },
+    { key: "market", label: "Market Opportunity", value: 0, trend: 0, reason: "Score updates after Idea Validation module is complete.", recommendation: "Run Idea Validation.", tone: "success" },
     { key: "financial", label: "Financial Health", value: 0, trend: 0, reason: "Score updates after Financial Planning module is complete.", recommendation: "Complete Financial Planning.", tone: "primary" },
     { key: "growth", label: "Growth Potential", value: 0, trend: 0, reason: "Score updates after Business Strategy module is complete.", recommendation: "Complete Business Strategy.", tone: "success" },
     { key: "risk", label: "Risk Level", value: 0, trend: 0, reason: "Score updates after Risk Intelligence module is complete.", recommendation: "Run Risk Intelligence.", tone: "destructive", invert: true },

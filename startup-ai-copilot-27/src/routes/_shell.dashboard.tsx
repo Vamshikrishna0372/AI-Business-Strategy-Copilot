@@ -204,11 +204,46 @@ function Dashboard() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <MetricCard label="Overall Startup Score" value={overallScore} unit="/100" trend={overallScore > 0 ? +6 : 0} hint={overallScore > 0 ? "Strong problem-solution fit" : "Complete Business Interview to generate"} tone="primary" />
-          <MetricCard label="Investor Readiness" value={investorReadiness} unit="/100" trend={investorReadiness > 0 ? +12 : 0} hint={investorReadiness > 0 ? "Ready for Seed funding" : "Complete journey modules to raise score"} tone="success" />
-          <MetricCard label="Business Health" value={businessHealth} unit="/100" trend={businessHealth > 0 ? +3 : 0} hint={businessHealth > 0 ? "Margins improving" : "Complete AI Interview to generate"} tone="primary" />
-          <MetricCard label="Innovation Score" value={innovationScore} unit="/100" trend={innovationScore > 0 ? +9 : 0} hint={innovationScore > 0 ? "Strong competitive moat" : "Complete AI Interview to generate"} tone="primary" />
-          <MetricCard label="Risk Rating" value={riskScore} unit="/100" trend={riskScore > 0 ? -7 : 0} hint={riskScore > 0 ? "Lower is better" : "Complete Risk Intelligence module"} tone="warning" />
+          <MetricCard
+            label="Overall Startup Score"
+            value={overallScore > 0 ? overallScore : "--"}
+            unit={overallScore > 0 ? "/100" : ""}
+            trend={overallScore > 0 ? +6 : undefined}
+            hint={overallScore > 0 ? "Strong problem-solution fit" : "Complete Business Interview to generate"}
+            tone="primary"
+          />
+          <MetricCard
+            label="Investor Readiness"
+            value={investorReadiness > 0 ? investorReadiness : "--"}
+            unit={investorReadiness > 0 ? "/100" : ""}
+            trend={investorReadiness > 0 ? +12 : undefined}
+            hint={investorReadiness > 0 ? "Ready for Seed funding" : "Complete journey modules to calculate"}
+            tone="success"
+          />
+          <MetricCard
+            label="Business Health"
+            value={businessHealth > 0 ? businessHealth : "--"}
+            unit={businessHealth > 0 ? "/100" : ""}
+            trend={businessHealth > 0 ? +3 : undefined}
+            hint={businessHealth > 0 ? "Margins improving" : "Complete AI Interview to generate"}
+            tone="primary"
+          />
+          <MetricCard
+            label="Innovation Score"
+            value={innovationScore > 0 ? innovationScore : "--"}
+            unit={innovationScore > 0 ? "/100" : ""}
+            trend={innovationScore > 0 ? +9 : undefined}
+            hint={innovationScore > 0 ? "Strong competitive moat" : "Complete AI Interview to generate"}
+            tone="primary"
+          />
+          <MetricCard
+            label="Risk Rating"
+            value={riskScore > 0 ? riskScore : "--"}
+            unit={riskScore > 0 ? "/100" : ""}
+            trend={riskScore > 0 ? -7 : undefined}
+            hint={riskScore > 0 ? "Lower is better" : "Complete Risk Intelligence module"}
+            tone="warning"
+          />
         </div>
       )}
 
@@ -285,23 +320,32 @@ function Dashboard() {
         <SurfaceCard>
           <h2 className="text-base font-semibold">Business health</h2>
           <div className="mt-4 flex flex-col items-center gap-4">
-            <ScoreRing value={businessHealth} size={150} label="Health index" />
-            <div className="w-full space-y-2 text-sm">
-              {[
-                ["Product", Math.round(overallScore * 0.98)],
-                ["Commercial", Math.round(businessHealth)],
-                ["Team", Math.round(innovationScore)],
-                ["Capital", Math.round(investorReadiness * 0.9)],
-              ].map(([l, v]) => (
-                <div key={l as string} className="flex items-center gap-3">
-                  <span className="w-24 shrink-0 text-muted-foreground">{l}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${v as number}%` }} />
-                  </div>
-                  <span className="w-8 text-right tabular-nums text-muted-foreground">{v as number}</span>
+            {businessHealth > 0 ? (
+              <>
+                <ScoreRing value={businessHealth} size={150} label="Health index" />
+                <div className="w-full space-y-2 text-sm">
+                  {[
+                    ["Product", Math.round(overallScore * 0.98)],
+                    ["Commercial", Math.round(businessHealth)],
+                    ["Team", Math.round(innovationScore)],
+                    ["Capital", Math.round(investorReadiness * 0.9)],
+                  ].map(([l, v]) => (
+                    <div key={l as string} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-muted-foreground">{l}</span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${v as number}%` }} />
+                      </div>
+                      <span className="w-8 text-right tabular-nums text-muted-foreground">{v as number}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="flex h-52 w-full flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+                <Sparkles className="size-6 opacity-30" />
+                <p>Complete the AI Business Interview to generate your Business Health breakdown.</p>
+              </div>
+            )}
           </div>
         </SurfaceCard>
       </div>

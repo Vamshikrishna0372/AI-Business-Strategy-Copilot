@@ -85,19 +85,31 @@ export function BusinessScoreCard({ score }: { score: ScoreCardData }) {
     <SurfaceCard className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{score.label}</p>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-            positive ? "bg-success/12 text-success" : "bg-destructive/12 text-destructive",
-          )}
-        >
-          {score.trend >= 0 ? "+" : ""}
-          {score.trend}
-        </span>
+        {score.value > 0 ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              positive ? "bg-success/12 text-success" : "bg-destructive/12 text-destructive",
+            )}
+          >
+            {score.trend >= 0 ? "+" : ""}
+            {score.trend}
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            Pending
+          </span>
+        )}
       </div>
       <p className="mt-2 font-display text-3xl font-semibold tabular-nums">
-        {score.value}
-        <span className="ml-1 text-sm font-normal text-muted-foreground">/100</span>
+        {score.value > 0 ? (
+          <>
+            {score.value}
+            <span className="ml-1 text-sm font-normal text-muted-foreground">/100</span>
+          </>
+        ) : (
+          <span className="text-xl font-medium text-muted-foreground">--</span>
+        )}
       </p>
       <div className="mt-3">
         <Bar value={score.value} tone={score.tone === "destructive" ? "destructive" : score.tone} />
