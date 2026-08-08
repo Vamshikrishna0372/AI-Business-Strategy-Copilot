@@ -123,19 +123,21 @@ function SettingsPage() {
           <SurfaceCard hover={false}>
             <h2 className="text-base font-semibold">Connected accounts</h2>
             <div className="mt-4 divide-y">
-              {[["Google", "aarav@ecopack.ai", "Connected"], ["Shopify", "ecopack.myshopify.com", "Connected"], ["Slack", "Not connected", "Connect"]].map(
-                ([name, detail, action]) => (
-                  <div key={name} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{name}</p>
-                      <p className="text-xs text-muted-foreground">{detail}</p>
-                    </div>
-                    <Button variant={action === "Connect" ? "hero" : "outline"} size="sm">
-                      {action === "Connect" ? "Connect" : "Disconnect"}
-                    </Button>
+              {[
+                ["Google", user?.email || "Connected", user?.google_id ? "Connected" : "Connected"],
+                ["Shopify", "ecopack.myshopify.com", "Connected"],
+                ["Slack", "Not connected", "Connect"],
+              ].map(([name, detail, action]) => (
+                <div key={name} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{name}</p>
+                    <p className="text-xs text-muted-foreground">{detail}</p>
                   </div>
-                ),
-              )}
+                  <Button variant={action === "Connect" ? "hero" : "outline"} size="sm">
+                    {action === "Connect" ? "Connect" : "Disconnect"}
+                  </Button>
+                </div>
+              ))}
             </div>
           </SurfaceCard>
         </TabsContent>
