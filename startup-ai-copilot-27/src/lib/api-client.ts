@@ -52,12 +52,15 @@ export function getStoredToken(): string | null {
 
 export function setStoredToken(token: string | null): void {
   const maxAge = 60 * 60 * 24 * 30; // 30 days
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const secureFlag = isHttps ? "; Secure" : "";
+
   if (token) {
     try { localStorage.setItem("copilot.auth_token", token); } catch {}
     try { sessionStorage.setItem("copilot.auth_token", token); } catch {}
     try {
       if (typeof document !== "undefined") {
-        document.cookie = `copilot.auth_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
+        document.cookie = `copilot.auth_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax${secureFlag}`;
       }
     } catch {}
   } else {
@@ -65,7 +68,7 @@ export function setStoredToken(token: string | null): void {
     try { sessionStorage.removeItem("copilot.auth_token"); } catch {}
     try {
       if (typeof document !== "undefined") {
-        document.cookie = "copilot.auth_token=; path=/; max-age=0; SameSite=Lax; Secure";
+        document.cookie = `copilot.auth_token=; path=/; max-age=0; SameSite=Lax${secureFlag}`;
       }
     } catch {}
   }

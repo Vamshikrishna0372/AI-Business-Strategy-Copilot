@@ -35,8 +35,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(profile);
     } catch (err: any) {
       console.warn("Failed to load authenticated user profile:", err);
-      setStoredToken(null);
-      setUser(null);
+      // Only wipe session tokens if explicitly unauthenticated (401 Unauthorized)
+      if (err?.status === 401) {
+        setStoredToken(null);
+        setUser(null);
+      } else {
+        setError(err?.message || "Failed to reach server. Session retained.");
+      }
     } finally {
       setIsLoading(false);
     }

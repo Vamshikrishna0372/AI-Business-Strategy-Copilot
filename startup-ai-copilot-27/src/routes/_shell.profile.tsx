@@ -5,6 +5,7 @@ import { MetricCard, PageHeader, SurfaceCard } from "@/components/common/ui-kit"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/_shell/profile")({
   head: () => ({
@@ -19,6 +20,17 @@ export const Route = createFileRoute("/_shell/profile")({
 });
 
 function Profile() {
+  const { user } = useAuth();
+
+  const initials = user?.full_name
+    ? user.full_name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .substring(0, 2)
+        .toUpperCase()
+    : "FU";
+
   return (
     <>
       <PageHeader title="Profile" subtitle="Your founder identity across every startup workspace." />
@@ -27,18 +39,24 @@ function Profile() {
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 sm:flex sm:flex-wrap sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <Avatar className="size-16 shrink-0">
-              <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">AR</AvatarFallback>
+              <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">
+                {initials}
+              </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-semibold">Aarav Rao</h2>
+              <h2 className="truncate text-xl font-semibold">{user?.full_name || "Founder User"}</h2>
               <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5"><Mail className="size-3.5" /> aarav@ecopack.ai</span>
-                <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" /> Bengaluru, India</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Mail className="size-3.5" /> {user?.email || "founder@startup.com"}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="size-3.5" /> {user?.timezone || "UTC"}
+                </span>
               </p>
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Badge variant="secondary">Pro plan (preview)</Badge>
+            <Badge variant="secondary">Founder plan</Badge>
             <Button variant="outline">Edit profile</Button>
           </div>
         </div>

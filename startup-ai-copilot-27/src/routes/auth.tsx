@@ -1,16 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
-import { ArrowRight, Loader2, Lock, Mail, User as UserIcon, Shield, Zap, TrendingUp, Target, BarChart3, Rocket, CheckCircle2, Brain, ChevronRight } from "lucide-react";
+import { useEffect } from "react";
+import { Zap, TrendingUp, Target, BarChart3, Rocket, CheckCircle2, Brain, Lock, Shield } from "lucide-react";
 
 import logo from "@/assets/logo.png";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AuthForm } from "@/components/common/auth-form";
 import { useAuth } from "@/lib/auth-context";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -187,156 +181,20 @@ function isMobileBrowser(): boolean {
 
 // ─── Auth page ─────────────────────────────────────────────────────────────────
 function AuthPage() {
-  const { isAuthenticated, isLoading, loginWithEmail, loginWithGoogle } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail]         = useState("");
-  const [password, setPassword]   = useState("");
-  const [name, setName]           = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Track whether we are processing a redirect-return token
-  const redirectHandled = useRef(false);
+  const redirectUrl =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("redirect") || "/dashboard"
+      : "/dashboard";
 
   // ── Auto-redirect if already authenticated ──
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate({ to: "/dashboard" });
+      navigate({ to: redirectUrl });
     }
-  }, [isLoading, isAuthenticated, navigate]);
-
-  // ── On mount: check if we are returning from a Google redirect flow ──
-  // Google implicit redirect returns access_token in the URL hash: #access_token=...
-  useEffect(() => {
-    if (redirectHandled.current) return;
-
-    const hash = window.location.hash;
-    if (!hash || !hash.includes("access_token")) return;
-
-    redirectHandled.current = true;
-
-    const params = new URLSearchParams(hash.replace(/^#/, ""));
-    const accessToken = params.get("access_token");
-    const error = params.get("error");
-
-    // Clean the hash from URL immediately so it doesn't persist
-    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-
-    if (error) {
-      if (!error.includes("access_denied")) {
-        setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
-      }
-      return;
-    }
-
-    if (accessToken) {
-      setGoogleLoading(true);
-      loginWithGoogle(accessToken)
-        .then(() => {
-          toast.success("Welcome! Signed in with Google.");
-          navigate({ to: "/dashboard" });
-        })
-        .catch((err: any) => {
-          setErrorMessage(friendlyError(err));
-          toast.error("Google sign-in failed. Please try again.");
-        })
-        .finally(() => {
-          setGoogleLoading(false);
-        });
-    }
-  }, [loginWithGoogle, navigate]);
-
-  // ── Friendly error translator ──
-  const friendlyError = (err: any): string => {
-    const msg = (err?.message || "").toLowerCase();
-    if (msg.includes("popup_closed") || msg.includes("cancelled") || msg.includes("popup closed"))
-      return "Sign-in cancelled. Please try again.";
-    if (msg.includes("network") || msg.includes("fetch"))
-      return "Network error. Please check your connection and try again.";
-    if (msg.includes("invalid") || msg.includes("expired"))
-      return "Your session has expired. Please sign in again.";
-    if (msg.includes("email") || msg.includes("password"))
-      return "Invalid email or password. Please try again.";
-    return err?.message || "Something went wrong. Please try again.";
-  };
-
-  // ── Email sign-in ──
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) { setErrorMessage("Please enter your email address."); return; }
-    setSubmitting(true);
-    setErrorMessage(null);
-    try {
-      await loginWithEmail(email, name || "Founder User", password);
-      toast.success("Welcome back!");
-      navigate({ to: "/dashboard" });
-    } catch (err: any) {
-      setErrorMessage(friendlyError(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ── Email sign-up ──
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) { setErrorMessage("Please enter your email address."); return; }
-    setSubmitting(true);
-    setErrorMessage(null);
-    try {
-      await loginWithEmail(email, name || "New Founder", password);
-      toast.success("Account created successfully! Let's set up your workspace.");
-      navigate({ to: "/startups/new" });
-    } catch (err: any) {
-      setErrorMessage(friendlyError(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ── Google OAuth — unified popup flow for all devices ──
-  // Uses @react-oauth/google popup which only requires Authorized JavaScript Origins
-  // (not Redirect URIs) in Google Cloud Console, so no redirect_uri_mismatch can occur.
-  // Works on both desktop and Android Chrome.
-  const handleGoogleLoginPopup = useGoogleLogin({
-    onSuccess: useCallback(async (tokenResponse) => {
-      setGoogleLoading(true);
-      setErrorMessage(null);
-      try {
-        await loginWithGoogle(tokenResponse.access_token);
-        toast.success("Welcome! Signed in with Google.");
-        navigate({ to: "/dashboard" });
-      } catch (err: any) {
-        setErrorMessage(friendlyError(err));
-        toast.error("Google sign-in failed. Please try again.");
-      } finally {
-        setGoogleLoading(false);
-      }
-    }, [loginWithGoogle, navigate]),
-
-    onError: (err) => {
-      setGoogleLoading(false);
-      const desc = (err as any)?.error_description || (err as any)?.error || "";
-      if (desc.includes("popup_closed") || desc.includes("access_denied")) return;
-      setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
-    },
-
-    flow: "implicit",
-    ux_mode: "popup",
-  });
-
-  const triggerGoogleLogin = () => {
-    setErrorMessage(null);
-    setGoogleLoading(true);
-    // Use popup flow on all devices — requires only Authorized JavaScript Origins, not Redirect URIs.
-    // Setting googleLoading is handled inside onSuccess/onError callbacks.
-    setGoogleLoading(false);
-    handleGoogleLoginPopup();
-  };
-
-  const isAnyLoading = submitting || googleLoading || isLoading;
+  }, [isLoading, isAuthenticated, navigate, redirectUrl]);
 
   return (
     <div style={{ display: "grid", minHeight: "100vh", gridTemplateColumns: "1fr" }}>
@@ -359,13 +217,17 @@ function AuthPage() {
         <LeftPanel />
 
         {/* Right panel */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "24px", background: "var(--background)",
-          minHeight: "100vh",
-        }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            background: "var(--background)",
+            minHeight: "100vh",
+          }}
+        >
           <div style={{ width: "100%", maxWidth: 400 }} className="animate-rise">
-
             {/* Mobile logo */}
             <div className="flex items-center gap-2.5 lg:hidden" style={{ marginBottom: 28 }}>
               <img src={logo} alt="" width={32} height={32} className="size-8" />
@@ -373,140 +235,22 @@ function AuthPage() {
             </div>
 
             {/* Heading */}
-            <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em", marginBottom: 4, fontFamily: "Sora, sans-serif" }}>
+            <h1
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                letterSpacing: "-0.03em",
+                marginBottom: 4,
+                fontFamily: "Sora, sans-serif",
+              }}
+            >
               Sign in to your workspace
             </h1>
             <p style={{ fontSize: 13.5, color: "var(--muted-foreground)", marginBottom: 28 }}>
               Continue building your investor-ready startup.
             </p>
 
-            {/* Error message */}
-            {errorMessage && (
-              <div style={{
-                marginBottom: 20, padding: "12px 14px",
-                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
-                borderRadius: 10, fontSize: 13, color: "var(--destructive)", fontWeight: 500,
-              }}>
-                {errorMessage}
-              </div>
-            )}
-
-            {/* Redirect return loading state */}
-            {googleLoading && (
-              <div style={{
-                marginBottom: 20, padding: "14px",
-                background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.18)",
-                borderRadius: 10, fontSize: 13, color: "var(--foreground)",
-                display: "flex", alignItems: "center", gap: 10,
-              }}>
-                <Loader2 size={16} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                Completing Google sign-in…
-              </div>
-            )}
-
-            {/* Google button */}
-            <button
-              className="google-btn"
-              disabled={isAnyLoading}
-              onClick={triggerGoogleLogin}
-              style={{
-                display: "flex", width: "100%", alignItems: "center", justifyContent: "center",
-                gap: 10, height: 46,
-                background: "#fff",
-                border: "1.5px solid rgba(0,0,0,0.14)",
-                borderRadius: 10,
-                fontSize: 14, fontWeight: 600,
-                color: "#374151",
-                cursor: isAnyLoading ? "not-allowed" : "pointer",
-                opacity: isAnyLoading ? 0.7 : 1,
-                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              }}
-            >
-              {googleLoading ? (
-                <>
-                  <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <>
-                  <GoogleIcon size={18} />
-                  <span>Continue with Google</span>
-                </>
-              )}
-            </button>
-
-            {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "22px 0", color: "var(--muted-foreground)", fontSize: 12 }}>
-              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-              or continue with email
-              <span style={{ flex: 1, height: 1, background: "var(--border)" }} />
-            </div>
-
-            {/* Tabs */}
-            <Tabs defaultValue="signin">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
-                <TabsTrigger value="signup">Create Account</TabsTrigger>
-              </TabsList>
-
-              {/* Sign In */}
-              <TabsContent value="signin" style={{ marginTop: 22 }}>
-                <form onSubmit={handleSignIn} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <Field id="email" label="Email" type="email" placeholder="founder@startup.com"
-                    icon={<Mail size={15} />} value={email} onChange={e => setEmail(e.target.value)} />
-                  <Field id="password" label="Password" type="password" placeholder="••••••••"
-                    icon={<Lock size={15} />} value={password} onChange={e => setPassword(e.target.value)} />
-
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--muted-foreground)", cursor: "pointer" }}>
-                      <Checkbox id="remember" defaultChecked /> Remember me
-                    </label>
-                    <span style={{ fontSize: 13, color: "var(--primary)", cursor: "pointer" }}
-                      onClick={() => toast.info("Password reset coming soon. Contact support.")}>
-                      Forgot password?
-                    </span>
-                  </div>
-
-                  <Button variant="hero" className="w-full" size="lg" type="submit" disabled={isAnyLoading}
-                    style={{ height: 46, fontSize: 14, fontWeight: 600 }}>
-                    {submitting ? <Loader2 className="size-4 animate-spin" /> : <>Sign in <ArrowRight className="ml-1 size-4" /></>}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              {/* Create Account */}
-              <TabsContent value="signup" style={{ marginTop: 22 }}>
-                <form onSubmit={handleSignUp} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <Field id="name" label="Full name" placeholder="Your name"
-                    icon={<UserIcon size={15} />} value={name} onChange={e => setName(e.target.value)} />
-                  <Field id="email2" label="Email" type="email" placeholder="founder@startup.com"
-                    icon={<Mail size={15} />} value={email} onChange={e => setEmail(e.target.value)} />
-                  <Field id="password2" label="Password" type="password" placeholder="At least 8 characters"
-                    icon={<Lock size={15} />} value={password} onChange={e => setPassword(e.target.value)} />
-
-                  <Button variant="hero" className="w-full" size="lg" type="submit" disabled={isAnyLoading}
-                    style={{ height: 46, fontSize: 14, fontWeight: 600 }}>
-                    {submitting ? <Loader2 className="size-4 animate-spin" /> : <>Create account <ArrowRight className="ml-1 size-4" /></>}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-
-            {/* Trust footer */}
-            <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-                {[
-                  { icon: Shield, text: "Enterprise Security" },
-                  { icon: Lock, text: "JWT Auth" },
-                  { icon: CheckCircle2, text: "Google Sign-In" },
-                ].map(({ icon: Icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <Icon size={12} color="var(--muted-foreground)" />
-                    <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <AuthForm redirectUrl={redirectUrl} />
           </div>
         </div>
       </div>
@@ -514,33 +258,3 @@ function AuthPage() {
   );
 }
 
-// ─── Form field ─────────────────────────────────────────────────────────────────
-function Field({
-  id, label, type = "text", placeholder, icon, value, onChange,
-}: {
-  id: string; label: string; type?: string; placeholder?: string;
-  icon?: React.ReactNode; value?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <Label htmlFor={id} style={{ fontSize: 13, fontWeight: 500 }}>{label}</Label>
-      <div style={{ position: "relative" }}>
-        {icon && (
-          <span style={{
-            position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
-            color: "var(--muted-foreground)", pointerEvents: "none", display: "flex",
-          }}>
-            {icon}
-          </span>
-        )}
-        <Input
-          id={id} type={type} placeholder={placeholder}
-          value={value} onChange={onChange}
-          className="auth-input"
-          style={{ height: 44, paddingLeft: icon ? 38 : 14, fontSize: 14 }}
-        />
-      </div>
-    </div>
-  );
-}

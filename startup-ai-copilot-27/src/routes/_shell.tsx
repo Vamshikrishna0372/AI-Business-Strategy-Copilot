@@ -29,9 +29,11 @@ function ShellLayout() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      navigate({ to: "/auth" });
+      if (typeof window !== "undefined") {
+        window.location.href = `/auth?redirect=${encodeURIComponent(pathname)}`;
+      }
     }
-  }, [isLoading, isAuthenticated, navigate]);
+  }, [isLoading, isAuthenticated, pathname]);
 
   if (isLoading) {
     return (
