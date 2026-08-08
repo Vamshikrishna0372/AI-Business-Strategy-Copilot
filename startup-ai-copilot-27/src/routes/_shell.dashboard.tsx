@@ -196,6 +196,42 @@ function Dashboard() {
         </div>
       )}
 
+      {/* Primary Application Entry Point Banner: AI Business Interview */}
+      <SurfaceCard className="relative overflow-hidden border-primary/30 p-6 bg-gradient-to-r from-card via-primary/5 to-accent/20 shadow-md">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1 max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-0.5 text-xs font-semibold text-primary">
+              <Sparkles className="size-3.5" /> Step 1 · Core Application Entry Point
+            </div>
+            <h2 className="text-xl font-bold text-foreground">
+              {["completed", "knowledge_generated", "all_modules_updated"].includes(interviewState)
+                ? "AI Business Diagnostic Interview Completed"
+                : interviewState === "in_progress" || interviewState === "paused" || interviewState === "stopped"
+                ? "Continue Active AI Business Interview"
+                : "Start AI Business Diagnostic Interview"}
+            </h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {["completed", "knowledge_generated", "all_modules_updated"].includes(interviewState)
+                ? `Full Business Knowledge Base generated for ${activeStartup.name}. All strategic modules are synchronized.`
+                : interviewState === "in_progress" || interviewState === "paused" || interviewState === "stopped"
+                ? `Resume your diagnostic consultation for ${activeStartup.name}. Answers and session progress are preserved.`
+                : `Complete a 10-step AI diagnostic consultation to extract your business intelligence and unlock your strategy suite.`}
+            </p>
+          </div>
+          <Button variant="hero" size="lg" className="shrink-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg" asChild>
+            <Link to="/interview">
+              <MessageSquareText className="size-4 mr-2" />
+              {["completed", "knowledge_generated", "all_modules_updated"].includes(interviewState)
+                ? "View Business Knowledge"
+                : interviewState === "in_progress" || interviewState === "paused" || interviewState === "stopped"
+                ? "Resume Interview"
+                : "🚀 Start AI Interview"}
+              <ArrowRight className="size-4 ml-1" />
+            </Link>
+          </Button>
+        </div>
+      </SurfaceCard>
+
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (

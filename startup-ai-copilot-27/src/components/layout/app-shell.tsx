@@ -91,6 +91,7 @@ const workspaceItems = [
 ];
 
 const currentStartupItems = [
+  { title: "AI Business Interview", url: "/interview", icon: MessageSquareText, highlight: true },
   { title: "Overview", url: "/overview", icon: LayoutDashboard },
   { title: "Founder Command Center", url: "/command", icon: Gauge },
   { title: "Reports Center", url: "/reports", icon: FileText },
@@ -110,12 +111,21 @@ function AppSidebar() {
   const { activeStartup, workspace } = useWorkspace();
   const journeyOpen = pathname === "/journey" || journeyModules.some((m) => m.route === pathname);
 
-  const item = (i: { title: string; url: string; icon: typeof Rocket }) => (
+  const item = (i: { title: string; url: string; icon: typeof Rocket; highlight?: boolean }) => (
     <SidebarMenuItem key={i.url}>
-      <SidebarMenuButton asChild isActive={pathname === i.url} tooltip={i.title}>
+      <SidebarMenuButton asChild isActive={pathname === i.url} tooltip={i.title} className={cn(i.highlight && "bg-primary/10 text-primary font-semibold hover:bg-primary/20 border border-primary/20")}>
         <Link to={i.url} className="flex items-center gap-2.5">
-          <i.icon className="size-4 shrink-0" />
-          {!collapsed && <span className="truncate">{i.title}</span>}
+          <i.icon className={cn("size-4 shrink-0", i.highlight && "text-primary")} />
+          {!collapsed && (
+            <div className="flex items-center justify-between w-full min-w-0">
+              <span className="truncate">{i.title}</span>
+              {i.highlight && (
+                <span className="ml-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[9px] font-bold">
+                  STEP 1
+                </span>
+              )}
+            </div>
+          )}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>

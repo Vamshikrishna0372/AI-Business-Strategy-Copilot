@@ -75,7 +75,7 @@ function Landing() {
               <Link to="/auth">Sign in</Link>
             </Button>
             <Button variant="hero" asChild>
-              <Link to="/dashboard">Start Building</Link>
+              <Link to="/interview">Start AI Interview</Link>
             </Button>
           </div>
         </div>
@@ -91,18 +91,17 @@ function Landing() {
               AI Business <span className="text-gradient">Strategy Copilot</span>
             </h1>
             <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
-              Transform your business idea into an investor-ready startup with AI-powered business strategy,
-              market validation, financial planning, and execution guidance.
+              Transform your business idea into an investor-ready startup starting with our AI Business Diagnostic Interview.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button variant="hero" size="lg" asChild>
-                <Link to="/startups/new">
-                  Start Building <ArrowRight />
+                <Link to="/interview">
+                  Start AI Interview <ArrowRight />
                 </Link>
               </Button>
               <Button variant="outline" size="lg" asChild>
                 <Link to="/dashboard">
-                  <PlayCircle /> Watch Demo
+                  <PlayCircle /> View Dashboard
                 </Link>
               </Button>
             </div>

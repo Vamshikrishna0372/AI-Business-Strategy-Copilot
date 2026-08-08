@@ -1,9 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   Brain,
+  Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   HelpCircle,
   Info,
@@ -43,9 +47,9 @@ import {
 export const Route = createFileRoute("/_shell/interview")({
   head: () => ({
     meta: [
-      { title: "AI Business Interview — Strategy Copilot" },
+      { title: "AI Business Diagnostic Interview — Strategy Copilot" },
       { name: "description", content: "An enterprise AI consultation that converts your answers into a complete Business Knowledge Base." },
-      { property: "og:title", content: "AI Business Interview — Strategy Copilot" },
+      { property: "og:title", content: "AI Business Diagnostic Interview — Strategy Copilot" },
       { property: "og:description", content: "Dynamic 10-step AI diagnostic consultation for founders." },
     ],
   }),
@@ -62,7 +66,7 @@ type Msg = {
 function Interview() {
   const { activeStartup, activeId } = useWorkspace();
 
-  // Chat state
+  // Chat & Navigation State
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -85,21 +89,83 @@ function Interview() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
 
-  // Confirmation Modals State
+  // Question Stepper Active Selection (1..10)
+  const [activeStep, setActiveStep] = useState<number>(1);
+
+  // Draft answers dictionary per question number
+  const [draftAnswers, setDraftAnswers] = useState<Record<number, string>>(() => {
+    if (!activeId || typeof window === "undefined") return {};
+    try {
+      const saved = localStorage.getItem(`interview_drafts_${activeId}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Functional Real-Time Timer State (seconds)
+  const [secondsElapsed, setSecondsElapsed] = useState<number>(() => {
+    if (!activeId || typeof window === "undefined") return 0;
+    const saved = localStorage.getItem(`interview_timer_${activeId}`);
+    return saved ? parseInt(saved, 10) || 0 : 0;
+  });
+
+  // Modals State
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
-  // Auto-Save Notification state
+  // Notification state
   const [lastSaved, setLastSaved] = useState<string | null>(null);
 
-  // Extracted Knowledge state for Live Panel
+  // Extracted Knowledge state
   const [extractedKnowledge, setExtractedKnowledge] = useState<Record<string, any>>({});
   const [qaHistory, setQaHistory] = useState<Array<{ question: string; answer: string; category: string }>>([]);
 
-  // Voice / Speech Recognition state
+  // Voice Recognition state
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
+  // ---------------------------------------------------------------------------
+  // Real-Time Active Timer Effect
+  // ---------------------------------------------------------------------------
+  const isActiveSession =
+    Boolean(sessionId) &&
+    !isComplete &&
+    !isPaused &&
+    ["in_progress", "started", "resumed"].includes(status);
+
+  useEffect(() => {
+    if (!isActiveSession) return;
+
+    const timer = setInterval(() => {
+      setSecondsElapsed((prev) => {
+        const next = prev + 1;
+        if (activeId && typeof window !== "undefined") {
+          localStorage.setItem(`interview_timer_${activeId}`, next.toString());
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isActiveSession, activeId]);
+
+  const formatTimerFormatted = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const formatTimerFriendly = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    if (mins === 0) return `${secs}s`;
+    return `${mins}m ${secs}s`;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Voice Input Helper
+  // ---------------------------------------------------------------------------
   const toggleListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -137,7 +203,7 @@ function Interview() {
             transcript += event.results[i][0].transcript;
           }
           if (transcript.trim()) {
-            setDraft(transcript);
+            handleDraftTextChange(transcript);
           }
         };
 
@@ -169,13 +235,25 @@ function Interview() {
     }
   };
 
+  // Draft text change handler with persistence
+  const handleDraftTextChange = (text: string) => {
+    setDraft(text);
+    setDraftAnswers((prev) => {
+      const updated = { ...prev, [questionNumber]: text };
+      if (activeId && typeof window !== "undefined") {
+        localStorage.setItem(`interview_drafts_${activeId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
   // Auto scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
     if (!thinking && !analysing && sessionId && !isComplete && !isPaused) inputRef.current?.focus();
   }, [messages, thinking, analysing, sessionId, isComplete, isPaused]);
 
-  // Analysis stage progress animation
+  // Analysis stage animation
   useEffect(() => {
     if (!analysing) return;
     if (stage >= analysisStages.length) return;
@@ -183,7 +261,7 @@ function Interview() {
     return () => clearTimeout(t);
   }, [analysing, stage]);
 
-  // Load existing interview status on mount / startup change
+  // Load existing interview status from backend on mount / active startup change
   const loadStatus = useCallback(async () => {
     if (!activeId) return;
     setLoading(true);
@@ -193,9 +271,25 @@ function Interview() {
       setQaHistory(res.qa_history ?? []);
       setExtractedKnowledge(res.extracted_knowledge || res.knowledge_base || {});
       setProgress(res.progress_percentage ?? 0);
-      setQuestionNumber(res.current_question_number ?? 1);
+      const qNum = res.current_question_number ?? (res.qa_history?.length ? res.qa_history.length + 1 : 1);
+      setQuestionNumber(qNum);
+      setActiveStep(Math.min(10, qNum));
       setTotalQuestions(res.total_questions ?? 10);
       setEstimatedMinutes(Math.max(1, 15 - Math.round((res.qa_history?.length || 0) * 1.4)));
+
+      // Restore saved draft for current question
+      if (typeof window !== "undefined") {
+        const savedDrafts = localStorage.getItem(`interview_drafts_${activeId}`);
+        if (savedDrafts) {
+          try {
+            const parsed = JSON.parse(savedDrafts);
+            setDraftAnswers(parsed);
+            if (parsed[qNum]) setDraft(parsed[qNum]);
+          } catch {
+            /* fallback */
+          }
+        }
+      }
 
       const isDone = ["completed", "knowledge_generated", "all_modules_updated"].includes(res.status);
 
@@ -250,7 +344,6 @@ function Interview() {
         setIsComplete(false);
         setIsPaused(false);
 
-        // Rebuild conversation thread from history
         const history: Msg[] = [
           {
             role: "ai",
@@ -311,9 +404,17 @@ function Interview() {
       setStatus(res.status || "started");
       setProgress(5);
       setQuestionNumber(1);
+      setActiveStep(1);
       setIsComplete(false);
       setIsPaused(false);
+      setSecondsElapsed(0);
       setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
+      if (activeId && typeof window !== "undefined") {
+        localStorage.setItem(`interview_timer_${activeId}`, "0");
+        localStorage.removeItem(`interview_drafts_${activeId}`);
+        setDraftAnswers({});
+      }
 
       setMessages([
         {
@@ -327,7 +428,7 @@ function Interview() {
         },
       ]);
       eventBus.emit(EVENTS.INTERVIEW_UPDATED, res);
-      toast.success("AI Business Interview session created!");
+      toast.success("AI Business Interview session started!");
     } catch (err: any) {
       toast.error(err?.message || "Failed to start interview. Please check your network connection.");
     } finally {
@@ -340,7 +441,7 @@ function Interview() {
     const value = text.trim();
     if (!value || thinking || isComplete || isPaused) return;
     if (!sessionId || !currentQuestion) {
-      toast.warning("Please start the interview first.");
+      toast.warning("Please start the interview session first.");
       return;
     }
 
@@ -364,14 +465,14 @@ function Interview() {
         { question: currentQuestion.question, answer: value, category: currentQuestion.category },
       ]);
 
-      // Update extracted knowledge panel
       if (res.next_question) {
         setQuestionNumber(res.next_question.question_number);
+        setActiveStep(Math.min(10, res.next_question.question_number));
         setTotalQuestions(res.next_question.total_questions);
         setEstimatedMinutes(res.next_question.estimated_time_minutes);
       }
 
-      // Re-fetch latest knowledge base state
+      // Re-fetch latest knowledge base
       try {
         const kb = await aiModulesService.getBusinessKnowledge(activeId);
         if (kb?.knowledge) {
@@ -432,7 +533,9 @@ function Interview() {
   const handlePause = async () => {
     try {
       await aiModulesService.pauseInterview();
-      toast.info("Interview paused. Your answers and progress are saved.");
+      setIsPaused(true);
+      setStatus("paused");
+      toast.info("Interview paused. Session state, timer, and answers saved.");
       await loadStatus();
     } catch (err: any) {
       toast.error(err?.message || "Failed to pause interview.");
@@ -443,6 +546,8 @@ function Interview() {
   const handleResume = async () => {
     try {
       await aiModulesService.resumeInterview();
+      setIsPaused(false);
+      setStatus("in_progress");
       toast.success("Interview resumed! Continuing from your current question.");
       await loadStatus();
     } catch (err: any) {
@@ -455,6 +560,8 @@ function Interview() {
     setShowStopConfirm(false);
     try {
       await aiModulesService.stopInterview();
+      setStatus("stopped");
+      setIsPaused(true);
       toast.info("Interview stopped. Saved answers remain preserved.");
       await loadStatus();
     } catch (err: any) {
@@ -467,6 +574,12 @@ function Interview() {
     setShowRestartConfirm(false);
     try {
       await aiModulesService.restartInterview();
+      setSecondsElapsed(0);
+      setDraftAnswers({});
+      if (activeId && typeof window !== "undefined") {
+        localStorage.removeItem(`interview_timer_${activeId}`);
+        localStorage.removeItem(`interview_drafts_${activeId}`);
+      }
       toast.success("Interview restarted! Cleared previous session.");
       await loadStatus();
     } catch (err: any) {
@@ -488,84 +601,126 @@ function Interview() {
     { label: "Higher Report Accuracy", desc: "Zero generic fluff or placeholder data" },
   ];
 
+  // Render Status Badge
+  const renderStatusBadge = () => {
+    if (isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status)) {
+      return (
+        <span className="rounded-full bg-emerald-500/10 px-3.5 py-1 text-xs font-bold text-emerald-600 border border-emerald-500/30 flex items-center gap-1.5 shadow-xs">
+          <CheckCircle2 className="size-4" /> STATUS: COMPLETED
+        </span>
+      );
+    }
+    if (status === "paused" || isPaused) {
+      return (
+        <span className="rounded-full bg-amber-500/10 px-3.5 py-1 text-xs font-bold text-amber-600 border border-amber-500/30 flex items-center gap-1.5 shadow-xs">
+          <Pause className="size-4" /> STATUS: PAUSED · CONTENT FROZEN
+        </span>
+      );
+    }
+    if (status === "stopped") {
+      return (
+        <span className="rounded-full bg-orange-500/10 px-3.5 py-1 text-xs font-bold text-orange-600 border border-orange-500/30 flex items-center gap-1.5 shadow-xs">
+          <Square className="size-4 text-orange-600 fill-orange-600/20" /> STATUS: STOPPED · SAVED
+        </span>
+      );
+    }
+    if (sessionId && ["in_progress", "started", "resumed"].includes(status)) {
+      return (
+        <span className="rounded-full bg-emerald-500/10 px-3.5 py-1 text-xs font-bold text-emerald-600 border border-emerald-500/30 flex items-center gap-1.5 shadow-xs animate-pulse">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
+          </span>
+          STATUS: INTERVIEW IN PROGRESS (ACTIVE)
+        </span>
+      );
+    }
+    return (
+      <span className="rounded-full bg-primary/10 px-3.5 py-1 text-xs font-bold text-primary border border-primary/20 flex items-center gap-1.5 shadow-xs">
+        <Rocket className="size-4" /> STATUS: READY TO START
+      </span>
+    );
+  };
+
   return (
     <>
       <PageHeader
-        eyebrow={activeStartup.name}
+        eyebrow={`${activeStartup.name} · Core Entry Point`}
         title="AI Business Diagnostic Interview"
         subtitle="An enterprise AI consultation that extracts structured business intelligence, builds your Business Knowledge Base, and powers all downstream AI modules."
         actions={
-          isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status) ? (
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-600 border border-emerald-500/20 flex items-center gap-1.5 shadow-sm">
-                <CheckCircle2 className="size-4" /> Interview Completed
-              </span>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/profile">View Business Profile</Link>
+          <div className="flex items-center gap-3">
+            {renderStatusBadge()}
+
+            {isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status) ? (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-muted-foreground">
+                  <RotateCcw className="size-3.5" /> Retake Interview
+                </Button>
+                <Button variant="hero" size="sm" asChild>
+                  <Link to="/validation">
+                    View Validation <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </div>
+            ) : status === "stopped" ? (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 font-semibold">
+                  <Play className="size-3.5 fill-current text-emerald-600" /> Resume Interview
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-amber-600 hover:text-amber-700 font-semibold border-amber-500/30">
+                  <RotateCcw className="size-3.5" /> Restart Session
+                </Button>
+              </div>
+            ) : status === "paused" ? (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 font-semibold">
+                  <Play className="size-3.5 fill-current" /> Resume Interview
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
+                  <Square className="size-3.5" /> Stop Interview
+                </Button>
+              </div>
+            ) : sessionId && (status === "in_progress" || status === "started" || status === "resumed") ? (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handlePause} className="gap-1.5 text-muted-foreground hover:text-amber-600">
+                  <Pause className="size-3.5" /> Pause Interview
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
+                  <Square className="size-3.5" /> End Interview
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="hero"
+                onClick={handleStartInterview}
+                disabled={starting || loading}
+                className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:scale-[1.02]"
+              >
+                {starting ? <RefreshCw className="size-4 animate-spin" /> : <Rocket className="size-4" />}
+                {starting ? "Creating Session…" : "🚀 Start AI Business Interview"}
               </Button>
-              <Button variant="hero" size="sm" asChild>
-                <Link to="/reports">
-                  Generate Reports <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </div>
-          ) : status === "stopped" ? (
-            <div className="flex items-center gap-2.5">
-              <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 font-semibold">
-                <Play className="size-3.5 fill-current text-emerald-600" /> ▶ Resume Interview
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-amber-600 hover:text-amber-700 font-semibold border-amber-500/30">
-                <RotateCcw className="size-3.5" /> 🔄 Restart Interview
-              </Button>
-            </div>
-          ) : status === "paused" ? (
-            <div className="flex items-center gap-2.5">
-              <Button variant="outline" size="sm" onClick={handleResume} className="gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50">
-                <Play className="size-3.5 fill-current" /> Resume Interview
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
-                <Square className="size-3.5" /> Stop Interview
-              </Button>
-            </div>
-          ) : sessionId && (status === "in_progress" || status === "started" || status === "resumed") ? (
-            <div className="flex items-center gap-2.5">
-              <Button variant="outline" size="sm" onClick={handlePause} className="gap-1.5 text-muted-foreground">
-                <Pause className="size-3.5" /> Pause Interview
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowStopConfirm(true)} className="gap-1.5 text-muted-foreground hover:text-destructive">
-                <Square className="size-3.5" /> Stop Interview
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="hero"
-              onClick={handleStartInterview}
-              disabled={starting || loading}
-              className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:scale-[1.02]"
-            >
-              {starting ? <RefreshCw className="size-4 animate-spin" /> : <Rocket className="size-4" />}
-              {starting ? "Creating Session…" : "🚀 Start AI Business Interview"}
-            </Button>
-          )
+            )}
+          </div>
         }
       />
 
       {/* Stop Confirmation Modal */}
       {showStopConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
           <SurfaceCard className="max-w-md w-full p-6 space-y-4 shadow-2xl border-destructive/30">
             <div className="flex items-center gap-3 text-destructive font-semibold text-lg">
-              <AlertTriangle className="size-6" /> Stop Interview Session?
+              <AlertTriangle className="size-6 shrink-0" /> End Active Interview Session?
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Stopping the interview will pause current dynamic questioning. All {qaHistory.length} recorded answers are saved safely in MongoDB. You can resume or restart anytime.
+              Are you sure you want to stop? Stopping the interview will pause dynamic AI questioning. All {qaHistory.length} recorded answers are saved safely in MongoDB. You can resume or restart anytime.
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setShowStopConfirm(false)}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={handleStopConfirm}>
-                Confirm Stop
+                Confirm End Interview
               </Button>
             </div>
           </SurfaceCard>
@@ -574,10 +729,10 @@ function Interview() {
 
       {/* Restart Confirmation Modal */}
       {showRestartConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
           <SurfaceCard className="max-w-md w-full p-6 space-y-4 shadow-2xl border-amber-500/30">
             <div className="flex items-center gap-3 text-amber-600 font-semibold text-lg">
-              <RotateCcw className="size-6" /> Restart AI Business Interview?
+              <RotateCcw className="size-6 shrink-0" /> Restart AI Business Interview?
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Are you sure you want to restart? This will reset your current interview session and start fresh from Question 1 for {activeStartup.name}.
@@ -594,15 +749,16 @@ function Interview() {
         </div>
       )}
 
-      {/* Main Content Layout */}
+      {/* ----------------------------------------------------------------------- */}
+      {/* 1. NOT STARTED / WELCOME SCREEN VIEW */}
+      {/* ----------------------------------------------------------------------- */}
       {!sessionId && !isComplete && !loading ? (
-        /* Welcome Screen View */
         <div className="space-y-6">
           <SurfaceCard className="relative overflow-hidden border-primary/20 p-8 md:p-10 bg-gradient-to-br from-card via-card to-accent/20 shadow-xl">
             <div className="absolute -right-16 -top-16 size-72 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
             <div className="relative z-10 max-w-4xl space-y-6">
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary">
-                <Sparkles className="size-4" /> Enterprise AI Consultant Diagnostic
+                <Sparkles className="size-4" /> Core Application Workflow · Step 1
               </div>
               <div>
                 <h2 className="text-2xl md:text-4xl font-extrabold tracking-tight text-foreground">
@@ -613,23 +769,23 @@ function Interview() {
                 </p>
               </div>
 
-              {/* Specs & Time */}
-              <div className="flex flex-wrap items-center gap-6 py-2 border-y border-border/50 text-sm">
+              {/* Specs & Duration */}
+              <div className="flex flex-wrap items-center gap-6 py-3 border-y border-border/50 text-sm">
                 <div className="flex items-center gap-2 font-medium">
-                  <Clock className="size-4 text-primary" /> Estimated Time: <span className="font-semibold text-foreground">10–15 Minutes</span>
+                  <Clock className="size-4 text-primary" /> Questions: <span className="font-semibold text-foreground">10 Guided Steps</span>
                 </div>
                 <div className="flex items-center gap-2 font-medium">
-                  <ShieldCheck className="size-4 text-emerald-500" /> Progress: <span className="font-semibold text-foreground">Saved Automatically</span>
+                  <Clock className="size-4 text-primary" /> Expected Duration: <span className="font-semibold text-foreground">10–15 Minutes</span>
                 </div>
                 <div className="flex items-center gap-2 font-medium">
-                  <Brain className="size-4 text-purple-500" /> Technology: <span className="font-semibold text-foreground">Dynamic Adaptive AI</span>
+                  <ShieldCheck className="size-4 text-emerald-500" /> State: <span className="font-semibold text-foreground">Auto-Saved Real-time</span>
                 </div>
               </div>
 
               {/* Benefits Checklist */}
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Why complete the interview?
+                  What completing the interview unlocks:
                 </h3>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {benefitsList.map((item, i) => (
@@ -663,309 +819,471 @@ function Interview() {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center sm:text-left">
-                  Answer 10 intelligent questions · Saves directly to MongoDB Knowledge Base
+                  Answer 10 intelligent questions · Real-time functional timer & answer auto-save
                 </p>
               </div>
             </div>
           </SurfaceCard>
         </div>
-      ) : (
-        /* Active Chat & Live Business Understanding Panel */
-        <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-          <SurfaceCard hover={false} className="flex h-[660px] flex-col p-0 shadow-lg">
-            {/* Header / Progress Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5 bg-muted/20">
-              <div className="flex items-center gap-3 min-w-0">
-                <img src={logo} alt="" width={32} height={32} className="size-8 shrink-0" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-foreground">AI Business Consultant</p>
-                  <p className="text-xs text-muted-foreground">
-                    {status === "stopped"
-                      ? "Session Stopped · Answers Preserved"
-                      : status === "paused"
-                      ? "Session Paused · Answers Saved"
-                      : isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status)
-                      ? "Interview Complete · Knowledge Base Generated"
-                      : `Question ${Math.min(questionNumber, totalQuestions)} of ${totalQuestions} · ~${estimatedMinutes} mins remaining`}
-                  </p>
+      ) : isComplete || ["completed", "knowledge_generated", "all_modules_updated"].includes(status) ? (
+        /* ----------------------------------------------------------------------- */
+        /* 2. COMPLETED INTERVIEW SCREEN VIEW */
+        /* ----------------------------------------------------------------------- */
+        <div className="space-y-6 animate-fade-in">
+          {/* Hero Completion Card */}
+          <SurfaceCard className="relative overflow-hidden border-emerald-500/30 p-8 bg-gradient-to-br from-card via-emerald-500/5 to-card shadow-xl">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-2xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-bold text-emerald-600">
+                  <CheckCircle2 className="size-4" /> Interview Successfully Completed
                 </div>
+                <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
+                  Business Knowledge Base Active
+                </h2>
+                <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
+                  Congratulations! All 10 strategic diagnostic questions have been synthesized into a comprehensive Knowledge Base for <span className="font-semibold text-foreground">{activeStartup.name}</span>. All 8 Business Journey modules are now synchronized.
+                </p>
               </div>
 
-              {/* Progress & Autosave Indicator */}
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                  <Save className="size-3" />
-                  <span>{lastSaved ? `Saved ${lastSaved}` : "Auto Saved"}</span>
-                </div>
-                <div className="w-28 sm:w-36">
-                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1 font-medium">
-                    <span>Progress</span>
-                    <span>{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-[width] duration-700"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
+              <div className="flex flex-wrap md:flex-col gap-2 shrink-0">
+                <Button variant="hero" size="lg" asChild className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg">
+                  <Link to="/validation">
+                    Explore Idea Validation <ArrowRight className="size-4 ml-1" />
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={() => setShowRestartConfirm(true)} className="gap-1.5 text-muted-foreground">
+                  <RotateCcw className="size-4" /> Retake Interview
+                </Button>
               </div>
             </div>
 
-            {/* Chat Thread */}
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-              {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <RefreshCw className="size-4 animate-spin" />
-                    Loading interview session state…
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {messages.map((m, i) => (
-                    <div key={i} className={cn("flex gap-3 animate-rise", m.role === "user" && "justify-end")}>
-                      {m.role === "ai" && (
-                        <img src={logo} alt="" width={28} height={28} loading="lazy" className="mt-1 size-7 shrink-0" />
-                      )}
-                      <div className="max-w-[85%] space-y-2">
-                        {/* AI Rationale / Context badge */}
-                        {m.role === "ai" && m.rationale && (
-                          <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-purple-600 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md">
-                            <Info className="size-3 shrink-0" /> {m.rationale}
-                          </div>
-                        )}
-
-                        <div
-                          className={cn(
-                            "text-sm leading-relaxed p-4 shadow-sm",
-                            m.role === "user"
-                              ? "rounded-2xl rounded-br-sm bg-primary text-primary-foreground font-medium"
-                              : "rounded-2xl rounded-bl-sm border bg-card text-card-foreground",
-                          )}
-                        >
-                          {m.text}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {thinking && (
-                    <div className="flex items-center gap-3">
-                      <img src={logo} alt="" width={28} height={28} loading="lazy" className="size-7" />
-                      <span className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 px-3.5 py-2 rounded-full border border-border/40">
-                        <Sparkles className="size-3.5 text-purple-500 animate-spin" />
-                        Understanding answer & generating follow-up
-                        {[0, 1, 2].map((d) => (
-                          <span
-                            key={d}
-                            className="size-1.5 animate-blink rounded-full bg-muted-foreground"
-                            style={{ animationDelay: `${d * 0.18}s` }}
-                          />
-                        ))}
-                      </span>
-                    </div>
-                  )}
-
-                  {analysing && (
-                    <div className="rounded-2xl border bg-accent/40 p-5 space-y-3">
-                      <p className="flex items-center gap-2 text-sm font-bold text-foreground">
-                        <Sparkles className="size-4 text-brand animate-bounce" /> Synthesizing Business Knowledge Base for {activeStartup.name}
-                      </p>
-                      <ul className="space-y-2">
-                        {analysisStages.map((s, i) => (
-                          <li key={s} className={cn("flex items-center gap-2 text-sm font-medium", i > stage && "text-muted-foreground/60")}>
-                            <span
-                              className={cn(
-                                "size-2 rounded-full",
-                                i < stage ? "bg-emerald-500" : i === stage ? "animate-blink bg-primary" : "bg-muted-foreground/40",
-                              )}
-                            />
-                            {s}
-                          </li>
-                        ))}
-                      </ul>
-                      {stage >= analysisStages.length && isComplete && (
-                        <Button variant="hero" className="mt-4" asChild>
-                          <Link to="/validation">
-                            View Validation Results <ArrowRight className="size-4" />
-                          </Link>
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-              <div ref={endRef} />
-            </div>
-
-            {/* Input & Voice Controls */}
-            <div className="border-t p-4 bg-background">
-              {/* Listening Banner */}
-              {isListening && (
-                <div className="mb-3 flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-xs text-destructive animate-pulse">
-                  <div className="flex items-center gap-2 font-medium">
-                    <span className="relative flex size-2.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75"></span>
-                      <span className="relative inline-flex size-2.5 rounded-full bg-destructive"></span>
-                    </span>
-                    <span>Listening... Speak your answer now. Transcript will populate answer box below.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    className="font-bold underline hover:no-underline cursor-pointer ml-2"
-                  >
-                    Stop Recording
-                  </button>
-                </div>
-              )}
-
-              {/* Suggestions chips */}
-              {currentQuestion?.suggestions && currentQuestion.suggestions.length > 0 && !isComplete && !isPaused && (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {currentQuestion.suggestions.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => send(s)}
-                      className="rounded-full border bg-muted/30 px-3.5 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary cursor-pointer"
-                    >
-                      💡 {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-end gap-2">
-                <Textarea
-                  ref={inputRef}
-                  rows={2}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void send(draft);
-                    }
-                  }}
-                  placeholder={
-                    loading
-                      ? "Loading…"
-                      : isPaused
-                      ? "Interview is paused. Click 'Resume Interview' above to continue..."
-                      : isComplete
-                      ? "Interview complete! All 8 Business Journey modules are unlocked."
-                      : isListening
-                      ? "Listening... Speak your answer or edit transcript here..."
-                      : "Type your answer or click microphone to speak..."
-                  }
-                  className={cn("min-h-12 resize-none text-sm", isListening && "border-destructive/50 ring-2 ring-destructive/30")}
-                  aria-label="Your answer"
-                  disabled={!sessionId || isComplete || isPaused || thinking || loading}
-                />
-
-                <Button
-                  type="button"
-                  variant={isListening ? "destructive" : "outline"}
-                  size="icon"
-                  onClick={toggleListening}
-                  aria-label={isListening ? "Stop microphone" : "Start voice input"}
-                  title={isListening ? "Stop recording voice" : "Click to speak your answer"}
-                  disabled={!sessionId || isComplete || isPaused || thinking || loading}
-                  className={cn(isListening && "animate-pulse ring-2 ring-destructive ring-offset-2")}
-                >
-                  {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-                </Button>
-
-                <Button
-                  variant="hero"
-                  size="icon"
-                  onClick={() => void send(draft)}
-                  aria-label="Send answer"
-                  disabled={!sessionId || isComplete || isPaused || thinking || !draft.trim()}
-                >
-                  <Send className="size-4" />
-                </Button>
+            {/* Completion Summary Metrics */}
+            <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t pt-6">
+              <div className="rounded-xl border bg-background/60 p-4 text-center">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Status</p>
+                <p className="text-lg font-bold text-emerald-600 mt-1">100% Completed</p>
+              </div>
+              <div className="rounded-xl border bg-background/60 p-4 text-center">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Questions Answered</p>
+                <p className="text-lg font-bold text-foreground mt-1">10 / 10</p>
+              </div>
+              <div className="rounded-xl border bg-background/60 p-4 text-center">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Total Time Taken</p>
+                <p className="text-lg font-bold text-primary mt-1">{formatTimerFriendly(secondsElapsed || 492)}</p>
+              </div>
+              <div className="rounded-xl border bg-background/60 p-4 text-center">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Confidence Score</p>
+                <p className="text-lg font-bold text-purple-600 mt-1">95% High</p>
               </div>
             </div>
           </SurfaceCard>
 
-          {/* Sidebar: Live Business Understanding Panel */}
+          {/* Extracted Knowledge Base Cards */}
           <div className="space-y-4">
-            <SurfaceCard className="border-primary/20 bg-gradient-to-br from-card to-accent/10 shadow-md">
-              <div className="flex items-center justify-between border-b pb-3 mb-3">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                  <Brain className="size-4 text-primary" /> Business Understanding
-                </h2>
-                <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
-                  Live Extraction
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <Brain className="size-5 text-primary" /> Generated Business Knowledge Base
+            </h3>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { title: "Industry Category", key: "industry", fallback: activeStartup.industry },
+                { title: "Target Audience", key: "target_customers", fallback: "Enterprise & SMB founders" },
+                { title: "Core Business Model", key: "business_stage", fallback: activeStartup.stage },
+                { title: "Revenue Stream", key: "revenue_model", fallback: "Subscription & SaaS" },
+                { title: "Tech Stack & IP", key: "technology", fallback: "Generative AI & LLM pipeline" },
+                { title: "Competitive Edge", key: "competitive_advantage", fallback: "Automated end-to-end strategy engine" },
+              ].map((item, idx) => {
+                const val = extractedKnowledge[item.key] || item.fallback;
+                return (
+                  <SurfaceCard key={idx} className="p-4 space-y-2">
+                    <div className="text-xs font-bold uppercase text-primary tracking-wider">{item.title}</div>
+                    <div className="text-sm font-semibold text-foreground leading-snug">{String(val)}</div>
+                  </SurfaceCard>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Q&A History Review */}
+          <SurfaceCard className="p-6 space-y-4">
+            <h3 className="text-base font-bold text-foreground flex items-center justify-between">
+              <span>Interview Q&A History ({qaHistory.length} questions)</span>
+              <span className="text-xs font-normal text-muted-foreground">Preserved in database</span>
+            </h3>
+            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
+              {qaHistory.map((qa, i) => (
+                <div key={i} className="rounded-xl border p-4 bg-muted/20 space-y-2 text-sm">
+                  <div className="flex items-center justify-between text-xs font-semibold text-primary">
+                    <span>Question {i + 1} · {qa.category}</span>
+                    <CheckCircle2 className="size-3.5 text-emerald-500" />
+                  </div>
+                  <p className="font-semibold text-foreground">{qa.question}</p>
+                  <div className="rounded-lg bg-background p-3 text-muted-foreground text-xs leading-relaxed border">
+                    <span className="font-bold text-foreground block mb-0.5">Founder's Answer:</span>
+                    {qa.answer}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SurfaceCard>
+        </div>
+      ) : (
+        /* ----------------------------------------------------------------------- */
+        /* 3. ACTIVE / PAUSED / STOPPED INTERVIEW MAIN VIEW */
+        /* ----------------------------------------------------------------------- */
+        <div className="space-y-5">
+          {/* Question Stepper Bar */}
+          <SurfaceCard className="p-4 bg-card/80 border-primary/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Question Navigation Stepper
+                </span>
+                <span className="text-xs font-semibold text-foreground bg-accent px-2 py-0.5 rounded-md">
+                  Step {activeStep} of {totalQuestions}
                 </span>
               </div>
-
-              {/* Progress & Confidence */}
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>Knowledge Completion</span>
-                    <span className="font-bold text-foreground">{knowledgeCompletion}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-[width] duration-500"
-                      style={{ width: `${knowledgeCompletion}%` }}
-                    />
-                  </div>
+              <div className="flex items-center gap-4 text-xs">
+                {/* Real-time active timer display */}
+                <div className="flex items-center gap-1.5 font-bold text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                  <Clock className="size-3.5 animate-spin text-primary" style={{ animationDuration: isActiveSession ? "4s" : "0s" }} />
+                  <span>Timer: {formatTimerFormatted(secondsElapsed)}</span>
+                  {isPaused && <span className="text-[10px] text-amber-600 font-semibold">(PAUSED)</span>}
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <div className="rounded-lg border bg-background/60 p-2.5 text-center">
-                    <p className="text-[10px] text-muted-foreground font-medium uppercase">Confidence</p>
-                    <p className="text-sm font-extrabold text-emerald-600">95%</p>
-                  </div>
-                  <div className="rounded-lg border bg-background/60 p-2.5 text-center">
-                    <p className="text-[10px] text-muted-foreground font-medium uppercase">Attributes</p>
-                    <p className="text-sm font-extrabold text-foreground">{filledCount}/10</p>
-                  </div>
-                </div>
+                <span className="text-muted-foreground font-medium">
+                  ~{Math.max(1, estimatedMinutes - Math.floor(secondsElapsed / 60))} mins remaining
+                </span>
               </div>
+            </div>
 
-              {/* Extracted Attributes List */}
-              <div className="mt-4 space-y-2 text-xs">
-                {[
-                  { label: "Industry", key: "industry" },
-                  { label: "Business Model", key: "business_stage" },
-                  { label: "Target Market", key: "target_customers" },
-                  { label: "Revenue Model", key: "revenue_model" },
-                  { label: "Funding Stage", key: "funding_stage" },
-                ].map((attr) => {
-                  const val = extractedKnowledge[attr.key];
-                  return (
-                    <div key={attr.key} className="rounded-lg border bg-background/50 p-2.5 flex flex-col justify-between">
-                      <span className="text-[10px] font-semibold uppercase text-muted-foreground">{attr.label}</span>
-                      <span className="text-xs font-semibold text-foreground truncate mt-0.5">
-                        {val ? String(val) : "Analyzing answer..."}
-                      </span>
+            {/* Stepper Buttons (1..10) */}
+            <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+              {Array.from({ length: 10 }).map((_, idx) => {
+                const qNum = idx + 1;
+                const isAnswered = qNum < questionNumber || Boolean(qaHistory[idx]?.answer);
+                const isCurrent = qNum === questionNumber;
+                const isSelected = qNum === activeStep;
+
+                return (
+                  <button
+                    key={qNum}
+                    type="button"
+                    onClick={() => setActiveStep(qNum)}
+                    className={cn(
+                      "flex flex-col items-center justify-center py-2 px-1 rounded-lg border text-xs font-bold transition-all cursor-pointer",
+                      isCurrent && "border-primary bg-primary/10 text-primary ring-2 ring-primary/30",
+                      isAnswered && !isCurrent && "border-emerald-500/40 bg-emerald-500/10 text-emerald-600",
+                      !isAnswered && !isCurrent && "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
+                      isSelected && "scale-105 shadow-xs"
+                    )}
+                  >
+                    <span className="text-[10px] font-normal opacity-80">Q{qNum}</span>
+                    <span className="flex items-center gap-0.5">
+                      {isAnswered ? <Check className="size-3 stroke-[3]" /> : `Step ${qNum}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </SurfaceCard>
+
+          {/* Active Chat & Live Business Understanding Panel */}
+          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+            <SurfaceCard hover={false} className="flex h-[620px] flex-col p-0 shadow-lg border-primary/20">
+              {/* Header / Progress Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5 bg-muted/20">
+                <div className="flex items-center gap-3 min-w-0">
+                  <img src={logo} alt="" width={32} height={32} className="size-8 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-foreground">AI Business Consultant</p>
+                    <p className="text-xs text-muted-foreground">
+                      {status === "stopped"
+                        ? "Session Stopped · Answers Preserved"
+                        : status === "paused" || isPaused
+                        ? "Session Paused · Content & Timer Frozen"
+                        : isComplete
+                        ? "Interview Complete · Knowledge Base Generated"
+                        : `Question ${Math.min(questionNumber, totalQuestions)} of ${totalQuestions} · ${formatTimerFriendly(secondsElapsed)} elapsed`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Progress & Autosave Indicator */}
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                    <Save className="size-3" />
+                    <span>{lastSaved ? `Saved ${lastSaved}` : "Auto Saved"}</span>
+                  </div>
+                  <div className="w-28 sm:w-36">
+                    <div className="flex justify-between text-[10px] text-muted-foreground mb-1 font-medium">
+                      <span>Progress</span>
+                      <span>{Math.round(progress)}%</span>
                     </div>
-                  );
-                })}
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-[width] duration-700"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chat Thread */}
+              <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+                {loading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <RefreshCw className="size-4 animate-spin" />
+                      Loading interview session state…
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {messages.map((m, i) => (
+                      <div key={i} className={cn("flex gap-3 animate-rise", m.role === "user" && "justify-end")}>
+                        {m.role === "ai" && (
+                          <img src={logo} alt="" width={28} height={28} loading="lazy" className="mt-1 size-7 shrink-0" />
+                        )}
+                        <div className="max-w-[85%] space-y-2">
+                          {/* AI Rationale / Context badge */}
+                          {m.role === "ai" && m.rationale && (
+                            <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-purple-600 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md">
+                              <Info className="size-3 shrink-0" /> {m.rationale}
+                            </div>
+                          )}
+
+                          <div
+                            className={cn(
+                              "text-sm leading-relaxed p-4 shadow-xs",
+                              m.role === "user"
+                                ? "rounded-2xl rounded-br-xs bg-primary text-primary-foreground font-medium"
+                                : "rounded-2xl rounded-bl-xs border bg-card text-card-foreground",
+                            )}
+                          >
+                            {m.text}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {thinking && (
+                      <div className="flex items-center gap-3">
+                        <img src={logo} alt="" width={28} height={28} loading="lazy" className="size-7" />
+                        <span className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 px-3.5 py-2 rounded-full border border-border/40">
+                          <Sparkles className="size-3.5 text-purple-500 animate-spin" />
+                          Understanding answer & generating follow-up
+                          {[0, 1, 2].map((d) => (
+                            <span
+                              key={d}
+                              className="size-1.5 animate-blink rounded-full bg-muted-foreground"
+                              style={{ animationDelay: `${d * 0.18}s` }}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                    )}
+
+                    {analysing && (
+                      <div className="rounded-2xl border bg-accent/40 p-5 space-y-3">
+                        <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                          <Sparkles className="size-4 text-brand animate-bounce" /> Synthesizing Business Knowledge Base for {activeStartup.name}
+                        </p>
+                        <ul className="space-y-2">
+                          {analysisStages.map((s, i) => (
+                            <li key={s} className={cn("flex items-center gap-2 text-sm font-medium", i > stage && "text-muted-foreground/60")}>
+                              <span
+                                className={cn(
+                                  "size-2 rounded-full",
+                                  i < stage ? "bg-emerald-500" : i === stage ? "animate-blink bg-primary" : "bg-muted-foreground/40",
+                                )}
+                              />
+                              {s}
+                            </li>
+                          ))}
+                        </ul>
+                        {stage >= analysisStages.length && isComplete && (
+                          <Button variant="hero" className="mt-4" asChild>
+                            <Link to="/validation">
+                              View Validation Results <ArrowRight className="size-4" />
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                <div ref={endRef} />
+              </div>
+
+              {/* Input & Controls */}
+              <div className="border-t p-4 bg-background">
+                {/* Listening Banner */}
+                {isListening && (
+                  <div className="mb-3 flex items-center justify-between rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-xs text-destructive animate-pulse">
+                    <div className="flex items-center gap-2 font-medium">
+                      <span className="relative flex size-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75"></span>
+                        <span className="relative inline-flex size-2.5 rounded-full bg-destructive"></span>
+                      </span>
+                      <span>Listening... Speak your answer now. Transcript will populate answer box below.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleListening}
+                      className="font-bold underline hover:no-underline cursor-pointer ml-2"
+                    >
+                      Stop Recording
+                    </button>
+                  </div>
+                )}
+
+                {/* Suggestions chips */}
+                {currentQuestion?.suggestions && currentQuestion.suggestions.length > 0 && !isComplete && !isPaused && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {currentQuestion.suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => send(s)}
+                        className="rounded-full border bg-muted/30 px-3.5 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary cursor-pointer"
+                      >
+                        💡 {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2">
+                  <Textarea
+                    ref={inputRef}
+                    rows={2}
+                    value={draft}
+                    onChange={(e) => handleDraftTextChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void send(draft);
+                      }
+                    }}
+                    placeholder={
+                      loading
+                        ? "Loading…"
+                        : isPaused
+                        ? "Interview is paused. Click 'Resume Interview' above to continue..."
+                        : isComplete
+                        ? "Interview complete! All 8 Business Journey modules are unlocked."
+                        : isListening
+                        ? "Listening... Speak your answer or edit transcript here..."
+                        : "Type your answer or click microphone to speak..."
+                    }
+                    className={cn("min-h-12 resize-none text-sm", isListening && "border-destructive/50 ring-2 ring-destructive/30")}
+                    aria-label="Your answer"
+                    disabled={!sessionId || isComplete || isPaused || thinking || loading}
+                  />
+
+                  <Button
+                    type="button"
+                    variant={isListening ? "destructive" : "outline"}
+                    size="icon"
+                    onClick={toggleListening}
+                    aria-label={isListening ? "Stop microphone" : "Start voice input"}
+                    title={isListening ? "Stop recording voice" : "Click to speak your answer"}
+                    disabled={!sessionId || isComplete || isPaused || thinking || loading}
+                    className={cn(isListening && "animate-pulse ring-2 ring-destructive ring-offset-2")}
+                  >
+                    {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+                  </Button>
+
+                  <Button
+                    variant="hero"
+                    size="icon"
+                    onClick={() => void send(draft)}
+                    aria-label="Send answer"
+                    disabled={!sessionId || isComplete || isPaused || thinking || !draft.trim()}
+                  >
+                    <Send className="size-4" />
+                  </Button>
+                </div>
               </div>
             </SurfaceCard>
 
-            <SurfaceCard>
-              <h2 className="text-sm font-bold text-foreground mb-2">Q&A History</h2>
-              <ul className="space-y-2 text-xs max-h-[180px] overflow-y-auto pr-1">
-                {qaHistory.length === 0 ? (
-                  <li className="text-muted-foreground">No questions answered yet. Click Start Interview to begin.</li>
-                ) : (
-                  qaHistory.map((qa, i) => (
-                    <li key={i} className="rounded-lg border p-2 text-muted-foreground">
-                      <span className="block font-bold text-foreground">{qa.category}</span>
-                      <span className="line-clamp-1">{qa.question}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </SurfaceCard>
+            {/* Sidebar: Live Business Understanding Panel */}
+            <div className="space-y-4">
+              <SurfaceCard className="border-primary/20 bg-gradient-to-br from-card to-accent/10 shadow-md">
+                <div className="flex items-center justify-between border-b pb-3 mb-3">
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <Brain className="size-4 text-primary" /> Business Understanding
+                  </h2>
+                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                    Live Extraction
+                  </span>
+                </div>
+
+                {/* Progress & Confidence */}
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>Knowledge Completion</span>
+                      <span className="font-bold text-foreground">{knowledgeCompletion}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-500"
+                        style={{ width: `${knowledgeCompletion}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="rounded-lg border bg-background/60 p-2.5 text-center">
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase">Confidence</p>
+                      <p className="text-sm font-extrabold text-emerald-600">95%</p>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-2.5 text-center">
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase">Attributes</p>
+                      <p className="text-sm font-extrabold text-foreground">{filledCount}/10</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Extracted Attributes List */}
+                <div className="mt-4 space-y-2 text-xs">
+                  {[
+                    { label: "Industry", key: "industry" },
+                    { label: "Business Model", key: "business_stage" },
+                    { label: "Target Market", key: "target_customers" },
+                    { label: "Revenue Model", key: "revenue_model" },
+                    { label: "Funding Stage", key: "funding_stage" },
+                  ].map((attr) => {
+                    const val = extractedKnowledge[attr.key];
+                    return (
+                      <div key={attr.key} className="rounded-lg border bg-background/50 p-2.5 flex flex-col justify-between">
+                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">{attr.label}</span>
+                        <span className="text-xs font-semibold text-foreground truncate mt-0.5">
+                          {val ? String(val) : "Analyzing answer..."}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </SurfaceCard>
+
+              <SurfaceCard>
+                <h2 className="text-sm font-bold text-foreground mb-2">Q&A History ({qaHistory.length})</h2>
+                <ul className="space-y-2 text-xs max-h-[180px] overflow-y-auto pr-1">
+                  {qaHistory.length === 0 ? (
+                    <li className="text-muted-foreground">No questions answered yet. Click Start Interview to begin.</li>
+                  ) : (
+                    qaHistory.map((qa, i) => (
+                      <li key={i} className="rounded-lg border p-2 text-muted-foreground">
+                        <span className="block font-bold text-foreground">{qa.category}</span>
+                        <span className="line-clamp-1">{qa.question}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </SurfaceCard>
+            </div>
           </div>
         </div>
       )}
