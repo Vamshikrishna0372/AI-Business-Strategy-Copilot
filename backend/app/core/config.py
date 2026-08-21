@@ -1,7 +1,7 @@
 """Centralized application settings configuration using Pydantic Settings."""
 
 from functools import lru_cache
-from typing import List, Union
+from typing import List, Optional, Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.common.enums import Environment
@@ -83,20 +83,33 @@ class Settings(BaseSettings):
     AI_MAX_RETRIES: int = Field(default=2, description="Max Automatic Retries before failover")
     AI_RATE_LIMIT_PER_MINUTE: int = Field(default=30, description="AI Request Limit per User per Startup per Minute")
 
+    # Alternative environment variable names supported on Render / Vercel
+    FRONTEND_URL: Optional[str] = Field(default=None, description="Frontend App Deployment URL")
+    FRONTEND_ORIGIN: Optional[str] = Field(default=None, description="Frontend Origin URL")
+    ALLOWED_ORIGINS: Optional[str] = Field(default=None, description="Comma-separated allowed origins")
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        origins = []
         if isinstance(v, str):
-            if not v.strip():
-                return []
-            import json
-            try:
-                parsed = json.loads(v)
-                if isinstance(parsed, list):
-                    return parsed
-            except Exception:
-                return [i.strip() for i in v.split(",") if i.strip()]
-        return v
+            if v.strip():
+                import json
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        origins = [str(item).strip().rstrip("/") for item in parsed if item]
+                except Exception:
+                    origins = [i.strip().rstrip("/") for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            origins = [str(item).strip().rstrip("/") for item in v if item]
+
+        # Always include production Vercel frontend origin
+        prod_vercel = "https://ai-business-strategy-copilot.vercel.app"
+        if prod_vercel not in origins:
+            origins.append(prod_vercel)
+
+        return origins
 
     def validate_production_env(self) -> None:
         """Explicitly validates that required production environment variables are present at startup."""

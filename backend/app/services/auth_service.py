@@ -34,6 +34,8 @@ class AuthService(BaseService[UserRepository]):
             user = await seed_admin_user()
 
         if user:
+            if not user.is_active:
+                raise ForbiddenException("User account has been deactivated")
             if user.hashed_password and provided_password:
                 if not verify_password(provided_password, user.hashed_password):
                     raise UnauthorizedException("Invalid email or password")
