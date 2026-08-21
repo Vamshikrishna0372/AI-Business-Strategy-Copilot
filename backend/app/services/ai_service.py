@@ -124,6 +124,43 @@ class AIService:
         reports = await self.report_repo.list_reports_by_startup(startup_id_str, limit=5)
         return [r.model_dump() for r in reports]
 
+    async def generate_module_analysis(
+        self,
+        user: User,
+        startup: Startup,
+        module: str,
+        prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generates AI analysis for a specific business strategy module."""
+        interview_data = await self._fetch_startup_interview_data(str(startup.id))
+        reports_summary = await self._fetch_startup_reports_summary(str(startup.id))
+
+        ai_context = ContextBuilder.build_startup_context(
+            startup=startup,
+            user=user,
+            interview_data=interview_data,
+            reports_summary=reports_summary,
+            current_module=module,
+        )
+
+        system_role, formatted_prompt = self.prompt_engine.render_prompt(
+            module=module,
+            context=ai_context,
+            query=prompt or f"Generate full strategy analysis for module '{module}'",
+        )
+
+        try:
+            raw_response = await self.provider.generate_structured_json(
+                prompt=formatted_prompt,
+                system_prompt=system_role,
+            )
+            validated = AIResponseValidator.parse_and_repair_json(raw_response)
+        except Exception as exc:
+            logger.error(f"[AIService Error] {exc}")
+            validated = AIResponseValidator.build_fallback_error_response(f"AI service error: {str(exc)}")
+
+        return validated
+
     # --- Conversation Processing ---
     async def process_chat_message(
         self,
@@ -297,10 +334,15 @@ class AIService:
         )
 
         # If previous interview was completed, allow restart/resume
-        if interview.status == InterviewStatus.COMPLETED or interview.status == InterviewStatus.ALL_MODULES_UPDATED:
+        if interview.status in (InterviewStatus.COMPLETED, InterviewStatus.ALL_MODULES_UPDATED) or (hasattr(interview.status, "value") and interview.status.value in ["completed", "all_modules_updated"]):
             interview = await self.interview_repo.update_status_and_summary(
                 interview_id_str=str(interview.id),
                 status=InterviewStatus.RESUMED,
+            )
+        elif interview.status in (InterviewStatus.NOT_STARTED, InterviewStatus.STARTED) or (hasattr(interview.status, "value") and interview.status.value in ["not_started", "started"]):
+            interview = await self.interview_repo.update_status_and_summary(
+                interview_id_str=str(interview.id),
+                status=InterviewStatus.IN_PROGRESS,
             )
 
         answered_count = len(interview.qa_history)

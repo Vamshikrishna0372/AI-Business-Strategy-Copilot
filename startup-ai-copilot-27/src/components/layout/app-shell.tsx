@@ -417,6 +417,14 @@ function TopBar() {
             <DropdownMenuItem asChild>
               <Link to="/settings">Settings</Link>
             </DropdownMenuItem>
+            {user?.role === "admin" && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="text-amber-600 dark:text-amber-400 font-bold">
+                  <Link to="/admin">Admin Panel</Link>
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:text-destructive cursor-pointer">
               Sign out

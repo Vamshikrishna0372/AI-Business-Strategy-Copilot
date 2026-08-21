@@ -115,12 +115,12 @@ export function AuthForm({
     setSubmitting(true);
     setErrorMessage(null);
     try {
-      await loginWithEmail(email.trim(), name.trim() || "Founder User", password);
-      toast.success("Welcome back!");
+      const loggedUser = await loginWithEmail(email.trim(), name.trim() || "Founder User", password);
+      toast.success(loggedUser.role === "admin" ? "Welcome back, System Administrator!" : "Welcome back!");
       if (onSuccess) {
-        onSuccess();
+        onSuccess(loggedUser);
       } else {
-        navigate({ to: redirectUrl });
+        navigate({ to: loggedUser.role === "admin" ? "/admin" : redirectUrl });
       }
     } catch (err: any) {
       setErrorMessage(friendlyError(err));

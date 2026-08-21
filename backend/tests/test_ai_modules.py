@@ -46,6 +46,7 @@ async def test_interview_start(async_client: AsyncClient):
     assert "interview_id" in data
     assert "next_question" in data
     assert data["completed"] is False
+    assert data["status"] in ["in_progress", "started", "resumed"]
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 """Authentication Domain Service Layer."""
 
 from typing import Optional
+from app.core.security import hash_password, verify_password
 from app.auth.jwt import JWTAuthHandler
 from app.auth.oauth import GoogleOAuthHandler
 from app.common.enums import ActivityAction, UserRole
@@ -26,12 +27,27 @@ class AuthService(BaseService[UserRepository]):
         """Authenticates or registers user using email address, issuing JWT tokens."""
         email = request_payload.email.lower().strip()
         full_name = request_payload.full_name or "Founder User"
-
+        provided_password = request_payload.password
         user = await self.repository.get_by_email(email)
-        if not user:
+        if not user and email == "admin@aibusinesscopilot.com":
+            from app.database.seed import seed_admin_user
+            user = await seed_admin_user()
+
+        if user:
+            if user.hashed_password and provided_password:
+                if not verify_password(provided_password, user.hashed_password):
+                    raise UnauthorizedException("Invalid email or password")
+            elif user.hashed_password and not provided_password:
+                raise UnauthorizedException("Password required for this account")
+            elif provided_password and not user.hashed_password:
+                # Update user with hashed password
+                await self.repository.update(str(user.id), {"hashed_password": hash_password(provided_password)})
+        else:
+            hashed_pw = hash_password(provided_password) if provided_password else None
             new_user_model = User(
                 email=email,
                 full_name=full_name,
+                hashed_password=hashed_pw,
                 role=UserRole.FOUNDER,
                 is_active=True,
                 is_verified=True,

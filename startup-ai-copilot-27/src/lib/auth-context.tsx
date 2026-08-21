@@ -51,12 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
-  const loginWithEmail = async (email: string, fullName?: string, password?: string) => {
+  const loginWithEmail = async (email: string, fullName?: string, password?: string): Promise<UserProfile> => {
     setIsLoading(true);
     setError(null);
     try {
       const res = await authService.loginWithEmail(email, fullName, password);
       setUser(res.user);
+      return res.user;
     } catch (err: any) {
       setError(err.message || "Login failed");
       throw err;
@@ -65,12 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginWithGoogle = async (idToken: string) => {
+  const loginWithGoogle = async (idToken: string): Promise<UserProfile> => {
     setIsLoading(true);
     setError(null);
     try {
       const res = await authService.loginWithGoogle(idToken);
       setUser(res.user);
+      return res.user;
     } catch (err: any) {
       setError(err.message || "Google authentication failed");
       throw err;

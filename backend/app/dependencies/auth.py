@@ -50,6 +50,9 @@ def require_roles(allowed_roles: List[UserRole]):
     return role_checker
 
 
+require_admin = require_roles([UserRole.ADMIN])
+
+
 async def get_current_active_startup(
     x_startup_id: Optional[str] = Header(default=None, alias="X-Startup-ID"),
     current_user: User = Depends(get_current_user),

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
+    admin,
     ai_engine,
     auth,
     chat,
@@ -21,6 +22,7 @@ api_v1_router = APIRouter(prefix="/api/v1")
 # Core infrastructure routers
 api_v1_router.include_router(health.router)
 api_v1_router.include_router(auth.router)
+api_v1_router.include_router(admin.router)
 api_v1_router.include_router(users.router)
 api_v1_router.include_router(startups.router)
 api_v1_router.include_router(notifications.router)

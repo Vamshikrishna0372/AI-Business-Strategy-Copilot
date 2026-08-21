@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ShellCanvasRouteImport } from './routes/_shell.canvas'
 import { Route as ShellCommandRouteImport } from './routes/_shell.command'
@@ -30,6 +31,13 @@ import { Route as ShellRoadmapRouteImport } from './routes/_shell.roadmap'
 import { Route as ShellSettingsRouteImport } from './routes/_shell.settings'
 import { Route as ShellStrategyRouteImport } from './routes/_shell.strategy'
 import { Route as ShellValidationRouteImport } from './routes/_shell.validation'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
+import { Route as AdminInterviewsRouteImport } from './routes/admin.interviews'
+import { Route as AdminProfileRouteImport } from './routes/admin.profile'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminStartupsRouteImport } from './routes/admin.startups'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as ShellStartupsIndexRouteImport } from './routes/_shell.startups.index'
 import { Route as ShellStartupsNewRouteImport } from './routes/_shell.startups.new'
 
@@ -40,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -137,6 +150,41 @@ const ShellValidationRoute = ShellValidationRouteImport.update({
   path: '/validation',
   getParentRoute: () => ShellRoute,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInterviewsRoute = AdminInterviewsRouteImport.update({
+  id: '/interviews',
+  path: '/interviews',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminProfileRoute = AdminProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminStartupsRoute = AdminStartupsRouteImport.update({
+  id: '/startups',
+  path: '/startups',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ShellStartupsIndexRoute = ShellStartupsIndexRouteImport.update({
   id: '/startups/',
   path: '/startups/',
@@ -150,6 +198,7 @@ const ShellStartupsNewRoute = ShellStartupsNewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/canvas': typeof ShellCanvasRoute
   '/command': typeof ShellCommandRoute
@@ -169,6 +218,13 @@ export interface FileRoutesByFullPath {
   '/settings': typeof ShellSettingsRoute
   '/strategy': typeof ShellStrategyRoute
   '/validation': typeof ShellValidationRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/interviews': typeof AdminInterviewsRoute
+  '/admin/profile': typeof AdminProfileRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/startups': typeof AdminStartupsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/': typeof AdminIndexRoute
   '/startups/new': typeof ShellStartupsNewRoute
   '/startups/': typeof ShellStartupsIndexRoute
 }
@@ -193,6 +249,13 @@ export interface FileRoutesByTo {
   '/settings': typeof ShellSettingsRoute
   '/strategy': typeof ShellStrategyRoute
   '/validation': typeof ShellValidationRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/interviews': typeof AdminInterviewsRoute
+  '/admin/profile': typeof AdminProfileRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/startups': typeof AdminStartupsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin': typeof AdminIndexRoute
   '/startups/new': typeof ShellStartupsNewRoute
   '/startups': typeof ShellStartupsIndexRoute
 }
@@ -200,6 +263,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_shell': typeof ShellRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/_shell/canvas': typeof ShellCanvasRoute
   '/_shell/command': typeof ShellCommandRoute
@@ -219,6 +283,13 @@ export interface FileRoutesById {
   '/_shell/settings': typeof ShellSettingsRoute
   '/_shell/strategy': typeof ShellStrategyRoute
   '/_shell/validation': typeof ShellValidationRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/interviews': typeof AdminInterviewsRoute
+  '/admin/profile': typeof AdminProfileRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/startups': typeof AdminStartupsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/': typeof AdminIndexRoute
   '/_shell/startups/new': typeof ShellStartupsNewRoute
   '/_shell/startups/': typeof ShellStartupsIndexRoute
 }
@@ -226,6 +297,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/auth'
     | '/canvas'
     | '/command'
@@ -245,6 +317,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/strategy'
     | '/validation'
+    | '/admin/analytics'
+    | '/admin/interviews'
+    | '/admin/profile'
+    | '/admin/settings'
+    | '/admin/startups'
+    | '/admin/users'
+    | '/admin/'
     | '/startups/new'
     | '/startups/'
   fileRoutesByTo: FileRoutesByTo
@@ -269,12 +348,20 @@ export interface FileRouteTypes {
     | '/settings'
     | '/strategy'
     | '/validation'
+    | '/admin/analytics'
+    | '/admin/interviews'
+    | '/admin/profile'
+    | '/admin/settings'
+    | '/admin/startups'
+    | '/admin/users'
+    | '/admin'
     | '/startups/new'
     | '/startups'
   id:
     | '__root__'
     | '/'
     | '/_shell'
+    | '/admin'
     | '/auth'
     | '/_shell/canvas'
     | '/_shell/command'
@@ -294,6 +381,13 @@ export interface FileRouteTypes {
     | '/_shell/settings'
     | '/_shell/strategy'
     | '/_shell/validation'
+    | '/admin/analytics'
+    | '/admin/interviews'
+    | '/admin/profile'
+    | '/admin/settings'
+    | '/admin/startups'
+    | '/admin/users'
+    | '/admin/'
     | '/_shell/startups/new'
     | '/_shell/startups/'
   fileRoutesById: FileRoutesById
@@ -301,6 +395,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ShellRoute: typeof ShellRouteWithChildren
+  AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
 }
 
@@ -318,6 +413,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -453,6 +555,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellValidationRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/interviews': {
+      id: '/admin/interviews'
+      path: '/interviews'
+      fullPath: '/admin/interviews'
+      preLoaderRoute: typeof AdminInterviewsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/profile': {
+      id: '/admin/profile'
+      path: '/profile'
+      fullPath: '/admin/profile'
+      preLoaderRoute: typeof AdminProfileRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/startups': {
+      id: '/admin/startups'
+      path: '/startups'
+      fullPath: '/admin/startups'
+      preLoaderRoute: typeof AdminStartupsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/_shell/startups/': {
       id: '/_shell/startups/'
       path: '/startups'
@@ -518,9 +669,32 @@ const ShellRouteChildren: ShellRouteChildren = {
 
 const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
 
+interface AdminRouteChildren {
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminInterviewsRoute: typeof AdminInterviewsRoute
+  AdminProfileRoute: typeof AdminProfileRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminStartupsRoute: typeof AdminStartupsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminInterviewsRoute: AdminInterviewsRoute,
+  AdminProfileRoute: AdminProfileRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminStartupsRoute: AdminStartupsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ShellRoute: ShellRouteWithChildren,
+  AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport

@@ -396,12 +396,19 @@ function Interview() {
 
   // Start new interview session
   const handleStartInterview = async () => {
+    // Idempotency check: if interview is already in progress and active, do not create a duplicate session
+    if (starting) return;
+    if (sessionId && !isPaused && !isComplete && ["in_progress", "started", "resumed"].includes(status)) {
+      return;
+    }
+
     setStarting(true);
     try {
       const res = await aiModulesService.startInterview();
       setSessionId(res.session_id);
       setCurrentQuestion(res.first_question);
-      setStatus(res.status || "started");
+      const activeStatus = res.status && res.status !== "not_started" ? res.status : "in_progress";
+      setStatus(activeStatus);
       setProgress(5);
       setQuestionNumber(1);
       setActiveStep(1);
@@ -752,7 +759,7 @@ function Interview() {
       {/* ----------------------------------------------------------------------- */}
       {/* 1. NOT STARTED / WELCOME SCREEN VIEW */}
       {/* ----------------------------------------------------------------------- */}
-      {!sessionId && !isComplete && !loading ? (
+      {(!sessionId || status === "not_started") && !isComplete && !loading ? (
         <div className="space-y-6">
           <SurfaceCard className="relative overflow-hidden border-primary/20 p-8 md:p-10 bg-gradient-to-br from-card via-card to-accent/20 shadow-xl">
             <div className="absolute -right-16 -top-16 size-72 rounded-full bg-primary/10 blur-3xl pointer-events-none" />

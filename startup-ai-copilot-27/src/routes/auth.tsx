@@ -181,7 +181,7 @@ function isMobileBrowser(): boolean {
 
 // ─── Auth page ─────────────────────────────────────────────────────────────────
 function AuthPage() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const redirectUrl =
@@ -192,9 +192,9 @@ function AuthPage() {
   // ── Auto-redirect if already authenticated ──
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate({ to: redirectUrl });
+      navigate({ to: user?.role === "admin" ? "/admin" : redirectUrl });
     }
-  }, [isLoading, isAuthenticated, navigate, redirectUrl]);
+  }, [isLoading, isAuthenticated, user, navigate, redirectUrl]);
 
   return (
     <div style={{ display: "grid", minHeight: "100vh", gridTemplateColumns: "1fr" }}>

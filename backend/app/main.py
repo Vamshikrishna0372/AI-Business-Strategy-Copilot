@@ -29,6 +29,8 @@ async def lifespan(app: FastAPI):
     try:
         await db_manager.connect_to_database()
         await create_database_indexes()
+        from app.database.seed import seed_admin_user
+        await seed_admin_user()
         from app.services.tavily_service import TavilyService
         tavily = TavilyService()
         await tavily.validate_key()
